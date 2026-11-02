@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Module 1: First-order response</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head><body style="font-family:sans-serif;max-width:800px;margin:auto;padding:8px">
+<h2>Module 1: First-order time response</h2>
+<label>Input:
+  <select id="mode"><option value="step">Step</option><option value="ramp">Ramp</option></select></label><br>
+<label>K = <span id="Kv">1</span></label>
+<input type="range" id="K" min="0.5" max="5" step="0.1" value="1" style="width:100%">
+<label>τ = <span id="tv">10</span> s</label>
+<input type="range" id="tau" min="1" max="30" step="0.5" value="10" style="width:100%">
+<div id="plot"></div><div id="errplot"></div>
+<div id="checks"></div>
+<script>
+const A = 1;
+const $ = id => document.getElementById(id);
+function y(t, K, tau, mode){
+  return mode==="step" ? K*A*(1-Math.exp(-t/tau))
+                       : K*A*(t - tau*(1-Math.exp(-t/tau)));
+}
+function update(){
+  const K=+$("K").value, tau=+$("tau").value, mode=$("mode").value;
+  $("Kv").textContent=K; $("tv").textContent=tau;
+  const T=Array.from({length:301},(_,i)=>i*5*tau/300);
+  const ideal = T.map(t => mode==="step"? K*A : K*A*t);
+  Plotly.react("plot",[
+    {x:T,y:T.map(t=>y(t,K,tau,mode)),name:"output y(t)"},
+    {x:T,y:ideal,name:"ideal input×K",line:{dash:"dot"}}
+  ],{title:"Response",xaxis:{title:"t (s)"},margin:{t:40}});
+  if(mode==="step"){
+    const E=T.slice(1).map(t=>Math.exp(-t/tau));
+    Plotly.react("errplot",[{x:T.slice(1),y:E,name:"error fraction"}],
+      {title:"Error fraction (log axis), slope = -1/τ",yaxis:{type:"log"},xaxis:{title:"t (s)"},margin:{t:40}});
+    const a=y(tau,K,tau,"step"), b=y(3*tau,K,tau,"step");
+    const row=(n,e,v)=>`<tr><td>${n}</td><td>${e.toFixed(3)}</td><td>${v.toFixed(3)}</td><td>${Math.abs(e-v)<0.01*K?"PASS":"FAIL"}</td></tr>`;
+    $("checks").innerHTML="<h3>Validation</h3><table border=1 cellpadding=4><tr><th>Test</th><th>Expected</th><th>Yours</th><th></th></tr>"
+      +row("y(τ)=0.632KA",0.632*K*A,a)+row("y(3τ)=0.95KA",0.95*K*A,b)+"</table>";
+  } else {
+    $("errplot").innerHTML=`<p>Ramp: lag = τ = ${tau} s, steady-state error = KAτ = ${(K*A*tau).toFixed(2)}</p>`;
+    $("checks").innerHTML="";
+  }
+}
+["K","tau","mode"].forEach(id=>$(id).addEventListener("input",update));
+update();
+</script></body></html>
