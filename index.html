@@ -6,29 +6,74 @@
 </head><body style="font-family:sans-serif;max-width:800px;margin:auto;padding:8px">
 <h2>Module 1: First-order time response</h2>
 <label>Input:
-  <select id="mode"><option value="step">Step</option><option value="ramp">Ramp</option></select></label><br>
+  <select id="mode"><option value="step">Step</option><option value="ramp">Ramp</option></select>
+</label><br>
 <label>K = <span id="Kv">1</span></label>
 <input type="range" id="K" min="0.5" max="5" step="0.1" value="1" style="width:100%">
 <label>τ = <span id="tv">10</span> s</label>
 <input type="range" id="tau" min="1" max="30" step="0.5" value="10" style="width:100%">
+
+<div style="background:#eee; padding:10px; margin-top:10px;">
+  <strong>Predict, then check:</strong> 
+  <label>Guess y(τ) for Step: <input type="number" id="guess" step="0.1"></label>
+  <button onclick="checkGuess()">Check</button>
+  <span id="guessResult" style="font-weight:bold; margin-left:10px;"></span>
+</div>
+
 <div id="plot"></div><div id="errplot"></div>
 <div id="checks"></div>
+
 <script>
 const A = 1;
 const $ = id => document.getElementById(id);
+
 function y(t, K, tau, mode){
   return mode==="step" ? K*A*(1-Math.exp(-t/tau))
                        : K*A*(t - tau*(1-Math.exp(-t/tau)));
 }
+
+function checkGuess() {
+  const K = +$("K").value;
+  const expected = +(0.632 * K * A).toFixed(2);
+  const guess = +$("guess").value;
+  if(Math.abs(guess - expected) < 0.1) $("guessResult").innerHTML = "✅ Correct! (" + expected + ")";
+  else $("guessResult").innerHTML = "❌ Try again! (Expected ≈ " + expected + ")";
+}
+
 function update(){
   const K=+$("K").value, tau=+$("tau").value, mode=$("mode").value;
   $("Kv").textContent=K; $("tv").textContent=tau;
-  const T=Array.from({length:301},(_,i)=>i*5*tau/300);
+  const T = Array.from({length:301},(_,i)=>i*5*tau/300);
   const ideal = T.map(t => mode==="step"? K*A : K*A*t);
+  
+  const dt = T[1] - T[0];
+  let y_euler = [];
+  let current_y = 0;
+  for(let i=0; i<T.length; i++){
+    y_euler.push(current_y);
+    let x_input = mode === "step" ? A : A * T[i];
+    let dy_dt = (K * x_input - current_y) / tau; 
+    current_y = current_y + dy_dt * dt;
+  }
+
+  let layout = {
+    title: "Response (with Euler ODE Bonus)", 
+    xaxis: {title: "t (s)"}, 
+    margin: {t:40},
+    shapes: []
+  };
+
+  if(mode === "step") {
+    layout.shapes.push({type: 'line', x0: tau, x1: tau, y0: 0, y1: K*A, line: {color: 'green', dash: 'dash'}});
+    layout.shapes.push({type: 'line', x0: 3*tau, x1: 3*tau, y0: 0, y1: K*A, line: {color: 'blue', dash: 'dash'}});
+  }
+
   Plotly.react("plot",[
-    {x:T,y:T.map(t=>y(t,K,tau,mode)),name:"output y(t)"},
-    {x:T,y:ideal,name:"ideal input×K",line:{dash:"dot"}}
-  ],{title:"Response",xaxis:{title:"t (s)"},margin:{t:40}});
+    {x: T, y: T.map(t=>y(t,K,tau,mode)), name: "Exact y(t)", line: {width: 4}},
+    {x: T, y: y_euler, name: "Euler Solver (Bonus)", line: {dash: "dash", color: "red"}},
+    {x: T, y: ideal, name: "Ideal input×K", line: {dash: "dot"}}
+  ], layout);
+
   if(mode==="step"){
     const E=T.slice(1).map(t=>Math.exp(-t/tau));
     Plotly.react("errplot",[{x:T.slice(1),y:E,name:"error fraction"}],
@@ -38,9 +83,13 @@ function update(){
     $("checks").innerHTML="<h3>Validation</h3><table border=1 cellpadding=4><tr><th>Test</th><th>Expected</th><th>Yours</th><th></th></tr>"
       +row("y(τ)=0.632KA",0.632*K*A,a)+row("y(3τ)=0.95KA",0.95*K*A,b)+"</table>";
   } else {
-    $("errplot").innerHTML=`<p>Ramp: lag = τ = ${tau} s, steady-state error = KAτ = ${(K*A*tau).toFixed(2)}</p>`;
+    $("errplot").innerHTML=`<p style="color:red; font-weight:bold;">Ramp Note: Output trails ideal input by a lag = τ = ${tau} s, and steady-state error = KAτ = ${(K*A*tau).toFixed(2)}</p>`;
     $("checks").innerHTML="";
   }
+}
+["K","tau","mode"].forEach(id=>$(id).addEventListener("input",update));
+update();
+</script></body></html>
 }
 ["K","tau","mode"].forEach(id=>$(id).addEventListener("input",update));
 update();
