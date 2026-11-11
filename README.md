@@ -69,5 +69,3 @@ Click an image to open it.
 ## Run the project locally
 
 Open `index.html` in a web browser. An internet connection is needed to load the Plotly.js library from its CDN.
-
-## AI usage
