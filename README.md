@@ -2,29 +2,31 @@
 
 An interactive web toolkit for exploring the dynamic response of sensors. This project was developed for **ENCS4380 – Interfacing Techniques** at Birzeit University.
 
-**Live site:** Add your GitHub Pages URL here after deployment.
+**Live site:** Add the GitHub Pages URL here after deployment.
+
+**Group:** Orion
 
 ## Team
 
 | Team member | GitHub username |
-| [Sadeen Haddad] | [sadeenMoHaddad] |
-| [Bisan Ayayda] | [bisanayaydah-sys] |
-| [Makram Sawaftah] | [1230548-a11y] |
-| [Haitham Khalifa] | [hathaimkhalifa-sys] |
-
+|---|---|
+| Sadeen Haddad | `sadeenMoHaddad` |
+| Bisan Ayayda | `bisanayaydah-sys` |
+| Makram Sawaftah | `1230548-a11y` |
+| Haitham Khalifa | `hathaimkhalifa-sys` |
 
 ## Module responsibilities
 
-| Module | Topic | Owner(s) |
+| Module | Topic | Owner |
 |---|---|---|
-| Module 1 | First-order time response | [Sadeen Haddad] |
-| Module 2 | First-order frequency response | [Haitham Khalifa] |
-| Module 3 | Second-order response and state-space model | [Bisan Ayayda] |
-| Module 4 | Guess the sensor challenge | [Makram Sawaftah] |
+| Module 1 | First-order time response | Sadeen Haddad |
+| Module 2 | First-order frequency response | Haitham Khalifa |
+| Module 3 | Second-order response and state-space model | Bisan Ayayda |
+| Module 4 | Guess the sensor challenge | Makram Sawaftah |
 
 ## Modules
 
-- **Module 1 – First-order time response:** Explore step and ramp inputs by changing gain \(K\) and time constant \(\tau\). The page shows the response, key step-response points, ramp lag, steady-state error, and an Euler solver comparison.
+- **Module 1 – First-order time response:** Explore step and ramp inputs by changing gain \(K\) and time constant \(\tau\). The page plots the response, marks the key step-response points, shows ramp lag and steady-state error, and compares the exact response with an Euler solver.
 - **Module 2 – First-order frequency response:** Explore how time constant and input frequency affect amplitude ratio, phase lag, Bode plots, cutoff frequency, and dynamic error.
 - **Module 3 – Second-order response:** Explore underdamped, critically damped, and overdamped responses. The page displays response metrics, pole locations, and the mass-spring-damper state-space model.
 - **Module 4 – Guess the sensor:** Estimate the parameters of a hidden noisy sensor, reveal the true response, compare curves, and keep a session score.
@@ -42,19 +44,27 @@ The toolkit includes checks for:
 
 ## Screenshots
 
-Add the screenshots to a folder named `screenshots` in this repository.
+Click an image to open it.
 
 ### Module 1
-![Module 1 screenshot](screenshots/module_1.png)
+
+[![Module 1 screenshot](screenshots/module1.png)](screenshots/module1.png)
 
 ### Module 2
-![Module 2 screenshot](screenshots/module_2.png)
+
+[![Module 2 screenshot A](screenshots/module2a.png)](screenshots/module2a.png)
+
+[![Module 2 screenshot B](screenshots/module2b.png)](screenshots/module2b.png)
 
 ### Module 3
-![Module 3 screenshot](screenshots/module_3.png)
+
+[![Module 3 screenshot A](screenshots/module3a.png)](screenshots/module3a.png)
+
+[![Module 3 screenshot B](screenshots/module3b.png)](screenshots/module3b.png)
 
 ### Module 4
-![Module 4 screenshot](screenshots/module_4.png)
+
+[![Module 4 screenshot](screenshots/module4.png)](screenshots/module4.png)
 
 ## Run the project locally
 
@@ -62,4 +72,4 @@ Open `index.html` in a web browser. An internet connection is needed to load the
 
 ## AI usage
 
-We used ChatGPT to assist with drafting and revising HTML, CSS, and JavaScript for Modules 1–4, including interactive controls, plots, and calculations. The team is responsible for reviewing and understanding the submitted code and equations so each member can explain their contribution during the demonstration.
+ChatGPT was used to assist with drafting and revising HTML, CSS, and JavaScript for Modules 1–4, including interactive controls, plots, and calculations. The team is responsible for reviewing and understanding the submitted code and equations and should be prepared to explain them during the demonstration.
