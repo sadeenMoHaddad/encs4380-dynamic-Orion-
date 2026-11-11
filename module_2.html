@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Module 2: First-order frequency response</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 960px;
+      margin: auto;
+      padding: 16px;
+      color: #172033;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+    }
+
+    .control {
+      margin: 14px 0;
+    }
+
+    input[type="range"] {
+      width: 100%;
+    }
+
+    .panel {
+      background: #f1f4f8;
+      padding: 14px;
+      margin: 16px 0;
+      border-radius: 10px;
+    }
+
+    .readouts {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 10px;
+    }
+
+    .readout {
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+    }
+
+    .value {
+      display: block;
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+
+    input[type="number"] {
+      width: 110px;
+      padding: 6px;
+    }
+
+    button {
+      padding: 7px 12px;
+      cursor: pointer;
+    }
+
+    #guessResult {
+      font-weight: 700;
+      margin-left: 8px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0;
+    }
+
+    th, td {
+      border: 1px solid #aab3c2;
+      padding: 7px;
+      text-align: left;
+    }
+
+    @media (max-width: 520px) {
+      body {
+        padding: 10px;
+      }
+
+      table {
+        font-size: .86rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Module 2: First-order frequency response</h1>
+
+  <p>
+    For a first-order sensor with unit static gain, the output sine has
+    amplitude ratio M and phase lag φ.
+  </p>
+
+  <div class="control">
+    <label for="tau">
+      Time constant τ = <span id="tauValue"></span>
+    </label>
+    <input
+      type="range"
+      id="tau"
+      min="0.1"
+      max="2000"
+      step="0.1"
+      value="200"
+    >
+  </div>
+
+  <div class="control">
+    <label for="frequency">
+      Input frequency f = <span id="frequencyValue"></span>
+    </label>
+    <input
+      type="range"
+      id="frequency"
+      min="0.1"
+      max="100"
+      step="0.1"
+      value="1"
+    >
+  </div>
+
+  <section class="panel readouts">
+    <div class="readout">
+      Angular frequency ω
+      <span class="value" id="omegaValue"></span>
+    </div>
+
+    <div class="readout">
+      Amplitude ratio M
+      <span class="value" id="mValue"></span>
+    </div>
+
+    <div class="readout">
+      Phase lag φ
+      <span class="value" id="phaseValue"></span>
+    </div>
+
+    <div class="readout">
+      Dynamic error δ = M − 1
+      <span class="value" id="errorValue"></span>
+    </div>
+
+    <div class="readout">
+      Cutoff frequency f<sub>c</sub>
+      <span class="value" id="cutoffHzValue"></span>
+    </div>
+
+    <div class="readout">
+      Cutoff angular frequency ω<sub>c</sub>
+      <span class="value" id="cutoffOmegaValue"></span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <strong>Predict, then check</strong>
+
+    <p>
+      Before checking, guess the output-to-input amplitude ratio M:
+    </p>
+
+    <label for="guess">Your guess:</label>
+    <input
+      type="number"
+      id="guess"
+      min="0"
+      max="1"
+      step="0.01"
+      placeholder="e.g. 0.80"
+    >
+
+    <button id="checkButton" type="button">Check</button>
+    <span id="guessResult" role="status" aria-live="polite"></span>
+  </section>
+
+  <div id="sinePlot" aria-label="Input and output sine waves"></div>
+
+  <h2>Bode plots</h2>
+  <div id="bodeMagnitude" aria-label="Bode magnitude plot"></div>
+  <div id="bodePhase" aria-label="Bode phase plot"></div>
+
+  <div id="validation"></div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    function calc(tauSeconds, frequencyHz) {
+      const omega = 2 * Math.PI * frequencyHz;
+      const magnitude = 1 / Math.sqrt(1 + (omega * tauSeconds) ** 2);
+      const phaseRad = -Math.atan(omega * tauSeconds);
+
+      return {
+        omega,
+        magnitude,
+        phaseRad,
+        phaseDeg: phaseRad * 180 / Math.PI
+      };
+    }
+
+    function checkGuess() {
+      const guessText = $("guess").value;
+      const guess = Number(guessText);
+
+      if (guessText === "" || !Number.isFinite(guess)) {
+        $("guessResult").textContent = "Enter a number first.";
+        return;
+      }
+
+      const tauSeconds = Number($("tau").value) / 1000;
+      const frequencyHz = Number($("frequency").value);
+      const expected = calc(tauSeconds, frequencyHz).magnitude;
+      const correct = Math.abs(guess - expected) <= 0.03;
+
+      $("guessResult").textContent = correct
+        ? `✅ Correct! M = ${expected.toFixed(3)}`
+        : `❌ Try again. M = ${expected.toFixed(3)}`;
+    }
+
+    function logSpace(min, max, count) {
+      const low = Math.log10(min);
+      const high = Math.log10(max);
+
+      return Array.from(
+        { length: count },
+        (_, i) => 10 ** (low + (high - low) * i / (count - 1))
+      );
+    }
+
+    function update() {
+      const tauMs = Number($("tau").value);
+      const tau = tauMs / 1000;
+      const frequencyHz = Number($("frequency").value);
+
+      const {
+        omega,
+        magnitude,
+        phaseDeg
+      } = calc(tau, frequencyHz);
+
+      const delta = magnitude - 1;
+      const cutoffHz = 1 / (2 * Math.PI * tau);
+      const cutoffOmega = 1 / tau;
+
+      $("tauValue").textContent =
+        `${tauMs.toFixed(1)} ms (${tau.toFixed(4)} s)`;
+
+      $("frequencyValue").textContent =
+        `${frequencyHz.toFixed(1)} Hz`;
+
+      $("omegaValue").textContent =
+        `${omega.toFixed(3)} rad/s`;
+
+      $("mValue").textContent =
+        magnitude.toFixed(4);
+
+      $("phaseValue").textContent =
+        `${Math.abs(phaseDeg).toFixed(2)}° lag`;
+
+      $("errorValue").textContent =
+        `${delta.toFixed(4)} (${(delta * 100).toFixed(2)}%)`;
+
+      $("cutoffHzValue").textContent =
+        `${cutoffHz.toFixed(4)} Hz`;
+
+      $("cutoffOmegaValue").textContent =
+        `${cutoffOmega.toFixed(4)} rad/s`;
+
+      // Input and output sine waves: show three periods.
+      const period = 1 / frequencyHz;
+      const times = Array.from(
+        { length: 801 },
+        (_, i) => 3 * period * i / 800
+      );
+
+      const input = times.map(t =>
+        Math.sin(omega * t)
+      );
+
+      const output = times.map(t =>
+        magnitude * Math.sin(omega * t + phaseDeg * Math.PI / 180)
+      );
+
+      Plotly.react("sinePlot", [
+        {
+          x: times,
+          y: input,
+          name: "Input x(t)",
+          mode: "lines",
+          line: { color: "#2878b5", width: 2 }
+        },
+        {
+          x: times,
+          y: output,
+          name: "Output y(t)",
+          mode: "lines",
+          line: { color: "#d4553d", width: 3 }
+        }
+      ], {
+        title: "Input and output sine waves",
+        xaxis: { title: "Time (s)" },
+        yaxis: { title: "Amplitude (normalized)" },
+        margin: { t: 48, r: 18, b: 48, l: 58 }
+      }, {
+        responsive: true
+      });
+
+      // Bode plots across a frequency range around the cutoff.
+      const minFrequency = Math.max(0.0001, cutoffHz / 1000);
+      const maxFrequency = Math.max(1000, cutoffHz * 1000);
+      const frequencies = logSpace(minFrequency, maxFrequency, 600);
+
+      const magnitudesDb = frequencies.map(f =>
+        20 * Math.log10(calc(tau, f).magnitude)
+      );
+
+      const phases = frequencies.map(f =>
+        calc(tau, f).phaseDeg
+      );
+
+      const cutoffLine = {
+        type: "line",
+        x0: cutoffHz,
+        x1: cutoffHz,
+        y0: 0,
+        y1: 1,
+        yref: "paper",
+        line: { color: "#228b22", dash: "dash" }
+      };
+
+      Plotly.react("bodeMagnitude", [{
+        x: frequencies,
+        y: magnitudesDb,
+        name: "Magnitude",
+        mode: "lines",
+        line: { color: "#7b4ab5", width: 3 }
+      }], {
+        title: "Bode magnitude response",
+        xaxis: { title: "Frequency (Hz)", type: "log" },
+        yaxis: { title: "Magnitude (dB)" },
+        shapes: [cutoffLine],
+        margin: { t: 48, r: 18, b: 48, l: 65 },
+        annotations: [{
+          x: cutoffHz,
+          y: -3.01,
+          text: "cutoff",
+          showarrow: true,
+          arrowhead: 2
+        }]
+      }, {
+        responsive: true
+      });
+
+      Plotly.react("bodePhase", [{
+        x: frequencies,
+        y: phases,
+        name: "Phase",
+        mode: "lines",
+        line: { color: "#d4553d", width: 3 }
+      }], {
+        title: "Bode phase response",
+        xaxis: { title: "Frequency (Hz)", type: "log" },
+        yaxis: { title: "Phase (degrees)" },
+        shapes: [cutoffLine],
+        margin: { t: 48, r: 18, b: 48, l: 65 }
+      }, {
+        responsive: true
+      });
+
+      // Validation values from the assignment.
+      // sin(2t) means angular frequency ω = 2 rad/s.
+      const test1 = calc(0.2, 2 / (2 * Math.PI));
+
+      // For no more than 5% dynamic error, M must be at least 0.95.
+      const tauMax =
+        Math.sqrt(1 / (0.95 ** 2) - 1) / (2 * Math.PI * 100);
+
+      const phaseAt50 = calc(tauMax, 50).phaseDeg;
+
+      const checks = [
+        [
+          "τ = 0.2 s, input sin(2t): amplitude ratio M",
+          "0.93",
+          test1.magnitude.toFixed(3),
+          Math.abs(test1.magnitude - 0.93) < 0.01
+        ],
+        [
+          "τ = 0.2 s, input sin(2t): phase lag",
+          "21.8°",
+          `${Math.abs(test1.phaseDeg).toFixed(1)}°`,
+          Math.abs(Math.abs(test1.phaseDeg) - 21.8) < 0.2
+        ],
+        [
+          "100 Hz with ≤5% dynamic error: τ maximum",
+          "≈0.52 ms",
+          `${(tauMax * 1000).toFixed(3)} ms`,
+          Math.abs(tauMax * 1000 - 0.52) < 0.02
+        ],
+        [
+          "At 50 Hz using τ maximum: phase lag",
+          "≈9.3°",
+          `${Math.abs(phaseAt50).toFixed(1)}°`,
+          Math.abs(Math.abs(phaseAt50) - 9.3) < 0.2
+        ]
+      ];
+
+      $("validation").innerHTML = `
+        <h2>Frequency-response validation</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Test</th>
+              <th>Expected</th>
+              <th>Calculated</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${checks.map(([name, expected, actual, pass]) =>
+              `<tr>
+                <td>${name}</td>
+                <td>${expected}</td>
+                <td>${actual}</td>
+                <td>${pass ? "PASS" : "FAIL"}</td>
+              </tr>`
+            ).join("")}
+          </tbody>
+        </table>`;
+    }
+
+    ["tau", "frequency"].forEach(id =>
+      $(id).addEventListener("input", update)
+    );
+
+    $("checkButton").addEventListener("click", checkGuess);
+
+    update();
+  </script>
+</body>
+</html>

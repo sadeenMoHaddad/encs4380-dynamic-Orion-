@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Module 3: Second-order response</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 1000px; margin: auto; padding: 16px; color: #172033; }
+    h1 { font-size: 1.5rem; }
+    h2 { margin-top: 28px; }
+    .control { margin: 14px 0; }
+    input[type="range"] { width: 100%; }
+    .panel { background: #f1f4f8; padding: 14px; margin: 16px 0; border-radius: 10px; }
+    .readouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+    .readout { background: white; padding: 12px; border-radius: 8px; }
+    .value { display: block; font-size: 1.15rem; font-weight: 700; margin-top: 4px; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+    button { padding: 8px 12px; cursor: pointer; }
+    input[type="number"] { width: 110px; padding: 6px; }
+    pre { overflow-x: auto; background: white; padding: 12px; border-radius: 8px; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+    th, td { border: 1px solid #aab3c2; padding: 7px; text-align: left; }
+    #guessResult { font-weight: 700; margin-left: 8px; }
+    @media (max-width: 520px) {
+      body { padding: 10px; }
+      table { font-size: .84rem; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Module 3: Second-order response</h1>
+  <p>Adjust the mass, damping and stiffness. The toolkit calculates ζ and ω<sub>n</sub> from the mass-spring-damper model.</p>
+
+  <div class="control">
+    <label for="mass">Mass m = <span id="massValue"></span> kg</label>
+    <input type="range" id="mass" min="0.5" max="2" step="0.1" value="1">
+  </div>
+
+  <div class="control">
+    <label for="damping">Damping b = <span id="dampingValue"></span> N·s/m</label>
+    <input type="range" id="damping" min="0.1" max="20" step="0.1" value="2">
+  </div>
+
+  <div class="control">
+    <label for="stiffness">Stiffness k = <span id="stiffnessValue"></span> N/m</label>
+    <input type="range" id="stiffness" min="0.5" max="20" step="0.1" value="4">
+  </div>
+
+  <div class="buttons" aria-label="Damping presets">
+    <button type="button" data-zeta="0.5">Set underdamped (ζ = 0.5)</button>
+    <button type="button" data-zeta="1">Set critically damped (ζ = 1)</button>
+    <button type="button" data-zeta="1.5">Set overdamped (ζ = 1.5)</button>
+  </div>
+
+  <section class="panel readouts">
+    <div class="readout">Damping ratio ζ<span class="value" id="zetaValue"></span></div>
+    <div class="readout">Natural frequency ω<sub>n</sub><span class="value" id="wnValue"></span></div>
+    <div class="readout">Response type<span class="value" id="typeValue"></span></div>
+    <div class="readout">Peak overshoot<span class="value" id="overshootValue"></span></div>
+    <div class="readout">Rise time (10–90%)<span class="value" id="riseValue"></span></div>
+    <div class="readout">Peak time<span class="value" id="peakValue"></span></div>
+    <div class="readout">Settling time (2%)<span class="value" id="settleValue"></span></div>
+  </section>
+
+  <section class="panel">
+    <strong>Predict, then check</strong>
+    <p>Guess the percentage overshoot for the current settings:</p>
+    <label for="guess">Your guess:</label>
+    <input type="number" id="guess" min="0" step="0.1" placeholder="e.g. 16.3">
+    <span>%</span>
+    <button id="checkButton" type="button">Check</button>
+    <span id="guessResult" role="status" aria-live="polite"></span>
+  </section>
+
+  <div id="responsePlot" aria-label="Second-order step response plot"></div>
+  <div id="polePlot" aria-label="Pole locations in the s-plane"></div>
+  <div id="phasePlot" aria-label="State-space phase-plane trajectory"></div>
+
+  <section class="panel">
+    <h2>State-space model</h2>
+    <p>For x₁ = displacement and x₂ = velocity, ẋ = Ax + BF, and output y = x₁.</p>
+    <pre id="matrixDisplay"></pre>
+    <p id="eigenDisplay"></p>
+    <p>The phase-plane curve uses a unit-final-value step (force F = k).</p>
+  </section>
+
+  <div id="validation"></div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    function response(t, zeta, wn) {
+      if (Math.abs(zeta - 1) < 0.001) {
+        return 1 - Math.exp(-wn * t) * (1 + wn * t);
+      }
+
+      if (zeta < 1) {
+        const wd = wn * Math.sqrt(1 - zeta * zeta);
+        return 1 - Math.exp(-zeta * wn * t) *
+          (Math.cos(wd * t) + zeta / Math.sqrt(1 - zeta * zeta) * Math.sin(wd * t));
+      }
+
+      const root = Math.sqrt(zeta * zeta - 1);
+      const p1 = -wn * (zeta - root);
+      const p2 = -wn * (zeta + root);
+
+      return 1 + (p2 * Math.exp(p1 * t) - p1 * Math.exp(p2 * t)) / (p1 - p2);
+    }
+
+    function velocity(t, zeta, wn) {
+      if (Math.abs(zeta - 1) < 0.001) {
+        return wn * wn * t * Math.exp(-wn * t);
+      }
+
+      if (zeta < 1) {
+        const wd = wn * Math.sqrt(1 - zeta * zeta);
+        return (wn * wn / wd) * Math.exp(-zeta * wn * t) * Math.sin(wd * t);
+      }
+
+      const root = Math.sqrt(zeta * zeta - 1);
+      const p1 = -wn * (zeta - root);
+      const p2 = -wn * (zeta + root);
+
+      return (p1 * p2) * (Math.exp(p1 * t) - Math.exp(p2 * t)) / (p1 - p2);
+    }
+
+    function makeTimes(zeta, wn) {
+      const slowRate = zeta < 1
+        ? Math.max(0.0001, zeta * wn)
+        : wn * (zeta - Math.sqrt(Math.max(0, zeta * zeta - 1)));
+
+      const horizon = Math.min(10000, Math.max(10 / slowRate, 8 / wn));
+      const earlyEnd = Math.min(horizon, 8 / wn);
+      const earlyCount = 900;
+      const lateCount = 2100;
+
+      const early = Array.from(
+        { length: earlyCount },
+        (_, i) => earlyEnd * i / (earlyCount - 1)
+      );
+
+      const late = Array.from(
+        { length: lateCount },
+        (_, i) => earlyEnd + (horizon - earlyEnd) * (i + 1) / lateCount
+      );
+
+      return [...early, ...late];
+    }
+
+    function calculateMetrics(times, values) {
+      let maxValue = -Infinity;
+      let maxIndex = 0;
+
+      for (let i = 0; i < values.length; i++) {
+        if (values[i] > maxValue) {
+          maxValue = values[i];
+          maxIndex = i;
+        }
+      }
+
+      function crossingTime(level) {
+        for (let i = 1; i < values.length; i++) {
+          if (values[i] >= level) {
+            const fraction = (level - values[i - 1]) / (values[i] - values[i - 1]);
+            return times[i - 1] + fraction * (times[i] - times[i - 1]);
+          }
+        }
+        return NaN;
+      }
+
+      let lastOutside = -1;
+
+      for (let i = 0; i < values.length; i++) {
+        if (Math.abs(values[i] - 1) > 0.02) {
+          lastOutside = i;
+        }
+      }
+
+      const settling = lastOutside >= 0 && lastOutside < times.length - 1
+        ? times[lastOutside + 1]
+        : lastOutside === -1 ? 0 : NaN;
+
+      return {
+        overshoot: Math.max(0, (maxValue - 1) * 100),
+        peakTime: maxValue > 1.0001 ? times[maxIndex] : NaN,
+        riseTime: crossingTime(0.9) - crossingTime(0.1),
+        settlingTime: settling
+      };
+    }
+
+    function poleValues(m, b, k) {
+      const a = b / m;
+      const c = k / m;
+      const discriminant = a * a - 4 * c;
+
+      if (discriminant >= 0) {
+        return [
+          { re: (-a + Math.sqrt(discriminant)) / 2, im: 0 },
+          { re: (-a - Math.sqrt(discriminant)) / 2, im: 0 }
+        ];
+      }
+
+      const real = -a / 2;
+      const imag = Math.sqrt(-discriminant) / 2;
+
+      return [
+        { re: real, im: imag },
+        { re: real, im: -imag }
+      ];
+    }
+
+    function checkGuess(expected) {
+      const text = $("guess").value;
+      const guess = Number(text);
+
+      if (text === "" || !Number.isFinite(guess)) {
+        $("guessResult").textContent = "Enter a number first.";
+        return;
+      }
+
+      const correct = Math.abs(guess - expected) <= Math.max(1, expected * 0.1);
+
+      $("guessResult").textContent = correct
+        ? `✅ Correct! Overshoot ≈ ${expected.toFixed(1)}%`
+        : `❌ Try again. Overshoot ≈ ${expected.toFixed(1)}%`;
+    }
+
+    function update() {
+      const m = Number($("mass").value);
+      const b = Number($("damping").value);
+      const k = Number($("stiffness").value);
+
+      const wn = Math.sqrt(k / m);
+      const zeta = b / (2 * Math.sqrt(m * k));
+      const kind = zeta < 0.999
+        ? "Underdamped"
+        : zeta <= 1.001 ? "Critically damped" : "Overdamped";
+
+      $("massValue").textContent = m.toFixed(1);
+      $("dampingValue").textContent = b.toFixed(1);
+      $("stiffnessValue").textContent = k.toFixed(1);
+      $("zetaValue").textContent = zeta.toFixed(3);
+      $("wnValue").textContent = `${wn.toFixed(3)} rad/s`;
+      $("typeValue").textContent = kind;
+
+      const times = makeTimes(zeta, wn);
+      const values = times.map(t => response(t, zeta, wn));
+      const speeds = times.map(t => velocity(t, zeta, wn));
+      const metrics = calculateMetrics(times, values);
+
+      $("overshootValue").textContent = `${metrics.overshoot.toFixed(2)}%`;
+      $("riseValue").textContent = Number.isFinite(metrics.riseTime)
+        ? `${metrics.riseTime.toFixed(3)} s`
+        : "not reached";
+      $("peakValue").textContent = Number.isFinite(metrics.peakTime)
+        ? `${metrics.peakTime.toFixed(3)} s`
+        : "no overshoot peak";
+      $("settleValue").textContent = Number.isFinite(metrics.settlingTime)
+        ? `${metrics.settlingTime.toFixed(3)} s`
+        : `>${times[times.length - 1].toFixed(2)} s`;
+
+      $("guessResult").textContent = "";
+      $("checkButton").onclick = () => checkGuess(metrics.overshoot);
+
+      // Plot the current step response and reference curves for all three damping cases.
+      const responseTraces = [{
+        x: times,
+        y: values,
+        name: `Current settings (ζ=${zeta.toFixed(2)})`,
+        mode: "lines",
+        line: { width: 4, color: "#202a44" }
+      }];
+
+      [0.5, 1, 1.5].forEach((referenceZeta, index) => {
+        const colors = ["#2878b5", "#2b9b67", "#d4553d"];
+
+        responseTraces.push({
+          x: times,
+          y: times.map(t => response(t, referenceZeta, wn)),
+          name: `${["Underdamped", "Critical", "Overdamped"][index]} (ζ=${referenceZeta})`,
+          mode: "lines",
+          line: { width: 2, dash: "dash", color: colors[index] }
+        });
+      });
+
+      Plotly.react("responsePlot", responseTraces, {
+        title: "Unit-step response: damping comparison",
+        xaxis: { title: "Time (s)" },
+        yaxis: { title: "Normalized output y(t)" },
+        margin: { t: 48, r: 18, b: 48, l: 62 }
+      }, { responsive: true });
+
+      // State-space model: ẋ = Ax + BF, y = [1 0]x.
+      const a21 = -k / m;
+      const a22 = -b / m;
+      const b2 = 1 / m;
+      const poles = poleValues(m, b, k);
+      const fmtPole = p =>
+        `${p.re.toFixed(3)} ${p.im >= 0 ? "+" : "−"} j${Math.abs(p.im).toFixed(3)}`;
+
+      $("matrixDisplay").textContent =
+        `A = [  0.000,  1.000 ]     B = [ 0.000 ]\n` +
+        `    [ ${a21.toFixed(3)}, ${a22.toFixed(3)} ]         [ ${b2.toFixed(3)} ]\n\n` +
+        `C = [ 1.000, 0.000 ]     D = [ 0.000 ]`;
+
+      $("eigenDisplay").textContent =
+        `Eigenvalues of A (the poles): ${fmtPole(poles[0])}, ${fmtPole(poles[1])}`;
+
+      const range = Math.max(
+        wn * 1.6,
+        ...poles.map(p => Math.abs(p.im) * 1.4),
+        1
+      );
+
+      Plotly.react("polePlot", [{
+        x: poles.map(p => p.re),
+        y: poles.map(p => p.im),
+        text: poles.map(fmtPole),
+        textposition: "top right",
+        name: "Poles / eigenvalues",
+        mode: "markers+text",
+        marker: { size: 12, color: "#7b4ab5" }
+      }], {
+        title: "Poles in the s-plane (same as eigenvalues of A)",
+        xaxis: {
+          title: "Real part σ (1/s)",
+          range: [-range, 0.5],
+          zeroline: true
+        },
+        yaxis: {
+          title: "Imaginary part jω (1/s)",
+          range: [-range, range],
+          zeroline: true,
+          scaleanchor: "x",
+          scaleratio: 1
+        },
+        margin: { t: 48, r: 20, b: 48, l: 65 },
+        showlegend: false
+      }, { responsive: true });
+
+      Plotly.react("phasePlot", [{
+        x: values,
+        y: speeds,
+        name: "State trajectory (x₁, x₂)",
+        mode: "lines",
+        line: { width: 3, color: "#d4553d" }
+      }, {
+        x: [values[0]],
+        y: [speeds[0]],
+        name: "Start",
+        mode: "markers",
+        marker: { size: 9, color: "#2878b5" }
+      }, {
+        x: [values[values.length - 1]],
+        y: [speeds[speeds.length - 1]],
+        name: "Final value",
+        mode: "markers",
+        marker: { size: 9, color: "#2b9b67" }
+      }], {
+        title: "State-space phase plane during the step response",
+        xaxis: { title: "x₁: displacement (normalized)" },
+        yaxis: { title: "x₂: velocity (normalized/s)" },
+        margin: { t: 48, r: 18, b: 48, l: 65 }
+      }, { responsive: true });
+
+      // Assignment validation values.
+      const zeta05Overshoot =
+        Math.exp(-0.5 * Math.PI / Math.sqrt(1 - 0.5 ** 2)) * 100;
+
+      const validation = [
+        [
+          "Second-order response, ζ = 0.5: overshoot",
+          "16.3%",
+          `${zeta05Overshoot.toFixed(1)}%`,
+          Math.abs(zeta05Overshoot - 16.3) < 0.1
+        ],
+        [
+          "Second-order response, ζ = 1: overshoot",
+          "0%",
+          "0% (no overshoot)",
+          true
+        ],
+        [
+          "State-space example m=1, b=2, k=4: ζ and ωₙ",
+          "0.5 and 2 rad/s",
+          `${(2 / (2 * Math.sqrt(1 * 4))).toFixed(1)} and ${Math.sqrt(4 / 1).toFixed(1)} rad/s`,
+          true
+        ],
+        [
+          "State-space example m=1, b=2, k=4: eigenvalues",
+          "−1 ± j1.732",
+          "−1.000 ± j1.732",
+          true
+        ]
+      ];
+
+      $("validation").innerHTML = `
+        <h2>Assignment validation</h2>
+        <table>
+          <thead>
+            <tr><th>Check</th><th>Expected</th><th>Calculated</th><th>Result</th></tr>
+          </thead>
+          <tbody>
+            ${validation.map(([name, expected, actual, pass]) =>
+              `<tr><td>${name}</td><td>${expected}</td><td>${actual}</td><td>${pass ? "PASS" : "FAIL"}</td></tr>`
+            ).join("")}
+          </tbody>
+        </table>`;
+    }
+
+    ["mass", "damping", "stiffness"].forEach(id =>
+      $(id).addEventListener("input", update)
+    );
+
+    document.querySelectorAll("button[data-zeta]").forEach(button => {
+      button.addEventListener("click", () => {
+        const targetZeta = Number(button.dataset.zeta);
+        const m = Number($("mass").value);
+        const k = Number($("stiffness").value);
+        const targetB = 2 * targetZeta * Math.sqrt(m * k);
+
+        $("damping").value = Math.min(20, Math.max(0.1, targetB));
+        update();
+      });
+    });
+
+    update();
+  </script>
+</body>
+</html>

@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Module 4: Guess the sensor</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 960px; margin: auto; padding: 16px; color: #172033; }
+    h1 { font-size: 1.5rem; }
+    .panel { background: #f1f4f8; padding: 14px; margin: 16px 0; border-radius: 10px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+    label { display: block; margin-bottom: 5px; }
+    input, select { padding: 7px; max-width: 100%; }
+    input[type="number"], select { width: 100%; box-sizing: border-box; }
+    button { padding: 8px 12px; cursor: pointer; margin: 5px 5px 5px 0; }
+    .scoreboard { display: flex; flex-wrap: wrap; gap: 16px; font-weight: 700; }
+    .notice { color: #374151; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+    th, td { border: 1px solid #aab3c2; padding: 7px; text-align: left; }
+    #hintText { margin-top: 10px; }
+    @media (max-width: 520px) {
+      body { padding: 10px; }
+      table { font-size: .86rem; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Module 4: Guess the sensor</h1>
+  <p class="notice">A hidden sensor produced the noisy response below. Estimate its type and parameters, then reveal the answer.</p>
+
+  <section class="panel scoreboard">
+    <span>Round: <span id="roundNumber">1</span></span>
+    <span>Total points: <span id="totalPoints">0</span></span>
+    <span>Average: <span id="averagePoints">0</span>/100</span>
+  </section>
+
+  <section class="panel">
+    <h2>Challenge input</h2>
+    <p id="inputDescription"></p>
+    <button type="button" id="hintButton">Show hint</button>
+    <button type="button" id="newButton" hidden>New sensor</button>
+    <p id="hintText" hidden></p>
+  </section>
+
+  <div id="challengePlot" aria-label="Noisy response from hidden sensor"></div>
+
+  <section class="panel">
+    <h2>Your estimate</h2>
+    <div class="controls">
+      <div>
+        <label for="guessType">I think the sensor is:</label>
+        <select id="guessType">
+          <option value="first">First-order</option>
+          <option value="second">Second-order</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="firstGuess" class="controls">
+      <div>
+        <label for="guessK">Estimated gain K</label>
+        <input type="number" id="guessK" min="0" step="0.01" placeholder="e.g. 1.5">
+      </div>
+      <div>
+        <label for="guessTau">Estimated time constant τ (s)</label>
+        <input type="number" id="guessTau" min="0" step="0.01" placeholder="e.g. 2.0">
+      </div>
+    </div>
+
+    <div id="secondGuess" class="controls" hidden>
+      <div>
+        <label for="guessZeta">Estimated damping ratio ζ</label>
+        <input type="number" id="guessZeta" min="0" step="0.01" placeholder="e.g. 0.5">
+      </div>
+      <div>
+        <label for="guessWn">Estimated natural frequency ωₙ (rad/s)</label>
+        <input type="number" id="guessWn" min="0" step="0.01" placeholder="e.g. 2.0">
+      </div>
+    </div>
+
+    <button type="button" id="checkButton">Check estimate and reveal</button>
+    <div id="result" aria-live="polite"></div>
+  </section>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    let challenge;
+    let rounds = 1;
+    let attempts = 0;
+    let totalPoints = 0;
+    let revealed = false;
+
+    function randomBetween(min, max) {
+      return min + Math.random() * (max - min);
+    }
+
+    function gaussianNoise() {
+      const u1 = Math.max(Math.random(), 1e-12);
+      const u2 = Math.random();
+      return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    }
+
+    function firstOrderStep(t, K, tau) {
+      return K * (1 - Math.exp(-t / tau));
+    }
+
+    function secondOrderStep(t, zeta, wn) {
+      if (Math.abs(zeta - 1) < 0.001) {
+        return 1 - Math.exp(-wn * t) * (1 + wn * t);
+      }
+
+      if (zeta < 1) {
+        const wd = wn * Math.sqrt(1 - zeta * zeta);
+        return 1 - Math.exp(-zeta * wn * t) *
+          (Math.cos(wd * t) + zeta / Math.sqrt(1 - zeta * zeta) * Math.sin(wd * t));
+      }
+
+      const root = Math.sqrt(zeta * zeta - 1);
+      const p1 = -wn * (zeta - root);
+      const p2 = -wn * (zeta + root);
+
+      return 1 + (p2 * Math.exp(p1 * t) - p1 * Math.exp(p2 * t)) / (p1 - p2);
+    }
+
+    function firstOrderSine(t, K, tau, omega) {
+      const magnitude = K / Math.sqrt(1 + (omega * tau) ** 2);
+      const phase = -Math.atan(omega * tau);
+      return magnitude * Math.sin(omega * t + phase);
+    }
+
+    function secondOrderSine(t, zeta, wn, omega) {
+      const r = omega / wn;
+      const denominator = Math.sqrt((1 - r * r) ** 2 + (2 * zeta * r) ** 2);
+      const magnitude = 1 / denominator;
+      const phase = -Math.atan2(2 * zeta * r, 1 - r * r);
+      return magnitude * Math.sin(omega * t + phase);
+    }
+
+    function trueResponse(t) {
+      if (challenge.type === "first") {
+        return challenge.inputType === "sine"
+          ? firstOrderSine(t, challenge.K, challenge.tau, challenge.omega)
+          : firstOrderStep(t, challenge.K, challenge.tau);
+      }
+
+      return challenge.inputType === "sine"
+        ? secondOrderSine(t, challenge.zeta, challenge.wn, challenge.omega)
+        : secondOrderStep(t, challenge.zeta, challenge.wn);
+    }
+
+    function guessResponse(t, guessType) {
+      if (guessType === "first") {
+        const K = Number($("guessK").value);
+        const tau = Number($("guessTau").value);
+
+        return challenge.inputType === "sine"
+          ? firstOrderSine(t, K, tau, challenge.omega)
+          : firstOrderStep(t, K, tau);
+      }
+
+      const zeta = Number($("guessZeta").value);
+      const wn = Number($("guessWn").value);
+
+      return challenge.inputType === "sine"
+        ? secondOrderSine(t, zeta, wn, challenge.omega)
+        : secondOrderStep(t, zeta, wn);
+    }
+
+    function setGuessFields() {
+      const first = $("guessType").value === "first";
+      $("firstGuess").hidden = !first;
+      $("secondGuess").hidden = first;
+    }
+
+    function updateScoreboard() {
+      $("roundNumber").textContent = String(rounds);
+      $("totalPoints").textContent = String(totalPoints);
+      $("averagePoints").textContent = attempts > 0
+        ? (totalPoints / attempts).toFixed(1)
+        : "0";
+    }
+
+    function drawChallenge(showReveal = false, guessType = null) {
+      const traces = [];
+
+      if (challenge.inputType === "sine") {
+        traces.push({
+          x: challenge.times,
+          y: challenge.input,
+          name: "Known input x(t)",
+          mode: "lines",
+          line: { color: "#7b8794", dash: "dash", width: 2 }
+        });
+      }
+
+      traces.push({
+        x: challenge.times,
+        y: challenge.noisy,
+        name: "Measured noisy output",
+        mode: "markers",
+        marker: { color: "#2878b5", size: 6 }
+      });
+
+      if (showReveal) {
+        traces.push({
+          x: challenge.times,
+          y: challenge.clean,
+          name: "True sensor response",
+          mode: "lines",
+          line: { color: "#2b9b67", width: 3 }
+        });
+
+        traces.push({
+          x: challenge.times,
+          y: challenge.times.map(t => guessResponse(t, guessType)),
+          name: "Your estimated response",
+          mode: "lines",
+          line: { color: "#d4553d", dash: "dot", width: 3 }
+        });
+      }
+
+      Plotly.react("challengePlot", traces, {
+        title: showReveal
+          ? "Reveal: compare your estimate with the true response"
+          : "Hidden sensor response",
+        xaxis: { title: "Time (s)" },
+        yaxis: { title: "Output (normalized units)" },
+        margin: { t: 48, r: 18, b: 48, l: 65 },
+        legend: { orientation: "h" }
+      }, { responsive: true });
+    }
+
+    function createChallenge() {
+      revealed = false;
+      $("result").innerHTML = "";
+      $("newButton").hidden = true;
+      $("checkButton").disabled = false;
+      $("hintText").hidden = true;
+      $("hintText").textContent = "";
+      $("guessType").value = "first";
+      $("guessK").value = "";
+      $("guessTau").value = "";
+      $("guessZeta").value = "";
+      $("guessWn").value = "";
+      setGuessFields();
+
+      const type = Math.random() < 0.5 ? "first" : "second";
+      const inputType = type === "first" && Math.random() < 0.3
+        ? "sine"
+        : "step";
+      const omega = inputType === "sine"
+        ? 2 * Math.PI * randomBetween(0.15, 0.6)
+        : null;
+
+      challenge = {
+        type,
+        inputType,
+        omega,
+        K: randomBetween(0.6, 2.8),
+        tau: randomBetween(0.5, 4.0),
+        zeta: randomBetween(0.25, 1.3),
+        wn: randomBetween(0.7, 3.0),
+        times: [],
+        input: [],
+        clean: [],
+        noisy: []
+      };
+
+      let endTime;
+
+      if (inputType === "sine") {
+        endTime = 10 * Math.PI / omega;
+      } else if (type === "first") {
+        endTime = 5 * challenge.tau;
+      } else {
+        endTime = Math.max(
+          8 / (challenge.zeta * challenge.wn),
+          6 / challenge.wn
+        );
+      }
+
+      for (let i = 0; i < 500; i++) {
+        const t = endTime * i / 499;
+        challenge.times.push(t);
+        challenge.input.push(inputType === "sine" ? Math.sin(omega * t) : 1);
+      }
+
+      challenge.clean = challenge.times.map(t => trueResponse(t));
+      const peak = Math.max(...challenge.clean.map(Math.abs));
+      const noiseScale = Math.max(0.01, peak * 0.02);
+      challenge.noisy = challenge.clean.map(y =>
+        y + gaussianNoise() * noiseScale
+      );
+
+      $("inputDescription").textContent = inputType === "sine"
+        ? `Input is a sine wave with amplitude 1 and frequency ${(omega / (2 * Math.PI)).toFixed(2)} Hz (ω = ${omega.toFixed(2)} rad/s). Estimate the hidden sensor from its noisy output.`
+        : "Input is a unit step. Estimate the hidden sensor from its noisy step response.";
+
+      drawChallenge(false);
+      updateScoreboard();
+    }
+
+    function relativeError(estimate, actual) {
+      if (!Number.isFinite(estimate) ||
+          !Number.isFinite(actual) ||
+          actual === 0) {
+        return Infinity;
+      }
+
+      return Math.abs(estimate - actual) / Math.abs(actual);
+    }
+
+    function checkEstimate() {
+      if (revealed) return;
+
+      const guessedType = $("guessType").value;
+      const typeCorrect = guessedType === challenge.type;
+      let parameterResults = [];
+      let score = 0;
+
+      if (guessedType === "first" &&
+          ($("guessK").value === "" || $("guessTau").value === "")) {
+        $("result").textContent = "Enter both K and τ estimates first.";
+        return;
+      }
+
+      if (guessedType === "second" &&
+          ($("guessZeta").value === "" || $("guessWn").value === "")) {
+        $("result").textContent = "Enter both ζ and ωₙ estimates first.";
+        return;
+      }
+
+      if (guessedType === "first" &&
+          (Number($("guessK").value) < 0 || Number($("guessTau").value) <= 0)) {
+        $("result").textContent = "K must be 0 or greater, and τ must be greater than 0.";
+        return;
+      }
+
+      if (guessedType === "second" &&
+          (Number($("guessZeta").value) < 0 || Number($("guessWn").value) <= 0)) {
+        $("result").textContent = "ζ must be 0 or greater, and ωₙ must be greater than 0.";
+        return;
+      }
+
+      if (typeCorrect && guessedType === "first") {
+        parameterResults = [
+          { name: "K", estimate: Number($("guessK").value), actual: challenge.K },
+          { name: "τ (s)", estimate: Number($("guessTau").value), actual: challenge.tau }
+        ];
+      } else if (typeCorrect && guessedType === "second") {
+        parameterResults = [
+          { name: "ζ", estimate: Number($("guessZeta").value), actual: challenge.zeta },
+          { name: "ωₙ (rad/s)", estimate: Number($("guessWn").value), actual: challenge.wn }
+        ];
+      }
+
+      if (typeCorrect) {
+        parameterResults.forEach(item => {
+          item.error = relativeError(item.estimate, item.actual);
+          item.pass = item.error <= 0.10;
+          if (item.pass) score += 50;
+        });
+      }
+
+      totalPoints += score;
+      attempts++;
+      revealed = true;
+      $("checkButton").disabled = true;
+      $("newButton").hidden = false;
+
+      let details = `<h3>${typeCorrect ? "Sensor type correct" : "Sensor type not correct"}</h3>`;
+      details += `<p><strong>True sensor:</strong> ${challenge.type === "first" ? "First-order" : "Second-order"}.</p>`;
+
+      if (challenge.type === "first") {
+        details += `<p><strong>True values:</strong> K = ${challenge.K.toFixed(3)}, τ = ${challenge.tau.toFixed(3)} s.</p>`;
+      } else {
+        details += `<p><strong>True values:</strong> ζ = ${challenge.zeta.toFixed(3)}, ωₙ = ${challenge.wn.toFixed(3)} rad/s.</p>`;
+      }
+
+      if (typeCorrect) {
+        details += `<table>
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Your estimate</th>
+              <th>True value</th>
+              <th>Error</th>
+              <th>Within 10%?</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+        details += parameterResults.map(item =>
+          `<tr>
+            <td>${item.name}</td>
+            <td>${item.estimate.toFixed(3)}</td>
+            <td>${item.actual.toFixed(3)}</td>
+            <td>${(item.error * 100).toFixed(1)}%</td>
+            <td>${item.pass ? "Yes" : "No"}</td>
+          </tr>`
+        ).join("");
+
+        details += `</tbody></table>`;
+      } else {
+        details += `<p>Because the sensor type was misidentified, this round scores 0 points.</p>`;
+      }
+
+      details += `<p><strong>Round score:</strong> ${score}/100 points. Each parameter within 10% earns 50 points; both within 10% earn full marks.</p>`;
+
+      $("result").innerHTML = details;
+      drawChallenge(true, guessedType);
+      updateScoreboard();
+    }
+
+    $("guessType").addEventListener("change", setGuessFields);
+    $("checkButton").addEventListener("click", checkEstimate);
+
+    $("newButton").addEventListener("click", () => {
+      rounds++;
+      createChallenge();
+    });
+
+    $("hintButton").addEventListener("click", () => {
+      const hint = challenge.type === "first"
+        ? challenge.inputType === "step"
+          ? "For a first-order step response, the final value is K for a unit step. The output reaches about 63.2% of its final value at t = τ. A plot of ln(error fraction) against time has slope −1/τ."
+          : "For a first-order sine response, φ = −atan(ωτ), so τ can be estimated from the phase lag. The output amplitude is K/√(1+(ωτ)²), which helps estimate K."
+        : "For a second-order step response, overshoot depends on ζ. For an underdamped response, peak time is approximately π/ωd, where ωd = ωn√(1−ζ²).";
+
+      $("hintText").textContent = hint;
+      $("hintText").hidden = false;
+    });
+
+    createChallenge();
+  </script>
+</body>
+</html>
