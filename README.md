@@ -2,9 +2,8 @@
 
 An interactive web toolkit for exploring the dynamic response of sensors. This project was developed for **ENCS4380 – Interfacing Techniques** at Birzeit University.
 
-**Live site:** Add the GitHub Pages URL here after deployment.
-
-**Group:** Orion
+**Live site:** [Open the toolkit](https://sadeenmohaddad.github.io/encs4380-dynamic-Orion-/)
+**Group:** ENCS4380-T13-Orion
 
 ## Team
 
