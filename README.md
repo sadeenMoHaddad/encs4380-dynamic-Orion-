@@ -71,5 +71,3 @@ Click an image to open it.
 Open `index.html` in a web browser. An internet connection is needed to load the Plotly.js library from its CDN.
 
 ## AI usage
-
-ChatGPT was used to assist with drafting and revising HTML, CSS, and JavaScript for Modules 1–4, including interactive controls, plots, and calculations. The team is responsible for reviewing and understanding the submitted code and equations and should be prepared to explain them during the demonstration.
