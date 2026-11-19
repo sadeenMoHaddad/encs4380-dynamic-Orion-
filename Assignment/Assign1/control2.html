@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control: PID Toolkit — Checkpoint (ENCS4380 HW2)</title>
+<style>
+:root{--bg:#fbfbf9;--fg:#1c2330;--mut:#5b6573;--card:#f0f2f4;--line:#cfd5db;--ac:#1f5fbf;--ok:#17803d;--bad:#c62828}
+@media(prefers-color-scheme:dark){:root{--bg:#12161c;--fg:#e8ecf1;--mut:#9aa5b1;--card:#1b2129;--line:#333d49;--ac:#6ea6ff;--ok:#4cc57a;--bad:#ff7b72}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+main{max-width:980px;margin:0 auto;padding:12px}
+h1{font-size:1.35rem;margin:6px 0}h2{font-size:1.1rem;margin:4px 0 8px}
+nav{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;position:sticky;top:0;background:var(--bg);padding:6px 0;z-index:5}
+nav button,.btn{border:1px solid var(--line);background:var(--card);color:var(--fg);padding:7px 11px;border-radius:6px;font:inherit;cursor:pointer;margin-top:4px}
+nav button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+section{display:none}section.on{display:block}
+.row{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:760px){.row{grid-template-columns:300px 1fr}}
+.ctl label{display:block;font-size:.85rem;margin:7px 0 0}
+.ctl input[type=range]{width:100%}
+.ctl select{width:100%;font:inherit;padding:5px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:5px}
+canvas{width:100%;height:215px;display:block;color:var(--fg);margin-bottom:8px;border:1px solid var(--line);border-radius:6px}
+.box{border:1px dashed var(--ac);border-radius:8px;padding:8px 10px;margin:10px 0;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left}
+.met{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:6px 0}
+@media(min-width:760px){.met{grid-template-columns:repeat(4,1fr)}}
+.met div{background:var(--card);border-radius:6px;padding:6px 8px;font-size:.8rem;color:var(--mut)}.met b{display:block;font-size:1.08rem;color:var(--fg)}
+.ok{color:var(--ok);font-weight:600}.bad{color:var(--bad);font-weight:600}
+p.s{color:var(--mut);font-size:.85rem;margin:4px 0}
+svg text{fill:currentColor;stroke:none}
+</style>
+</head>
+<body>
+<main>
+<h1>Control: PID Toolkit (Checkpoint: P1 &amp; P2)</h1>
+<p class="s">ENCS4380 Homework 2 — Closed-loop RK4 simulator (h = 1 ms) running live in your browser.</p>
+<nav id="nav"></nav>
+<div id="app"></div>
+<p class="s">Method: Plant and feedback sensor are integrated with RK4 (h = 1 ms). Derivative uses a 20 ms filtered derivative on measurement to avoid setpoint kick, and control is clipped at ±umax.</p>
+</main>
+<script>
+const $=(s,r=document)=>r.querySelector(s),clamp=(v,a,b)=>Math.min(b,Math.max(a,v)),fm=(v,d=2,u='')=>v==null||!isFinite(v)?'—':v.toFixed(d)+u;
+
+function sim(p){
+ const h=.001,N=Math.round(p.T/h),n2=+p.type===2,ts=p.ts<.005?0:p.ts,tf=.02;
+ let x=n2?[0,0,0]:[0,0]; const ns=x.length-1;
+ const f=(s,u)=>{
+  const d=new Array(ns+1);
+  if(n2){d[0]=s[1];d[1]=p.wn*p.wn*(p.K*u-s[0])-2*p.z*p.wn*s[1]}
+  else d[0]=(p.K*u-s[0])/p.tau;
+  d[ns]=ts?(s[0]-s[ns])/ts:0;
+  return d;
+ };
+ const add=(s,d,k)=>s.map((v,i)=>v+k*d[i]);
+ let I=0,u=0,mf=0;
+ const o={t:[],y:[],m:[],u:[]},st=Math.max(1,Math.ceil(N/2500));
+
+ for(let i=0;i<=N;i++){
+  if(!ts)x[ns]=x[0];
+  const m=x[ns], e=p.r-m;
+  const D=-p.kd*(m-mf)/tf, iN=I+e*h;
+  const raw=p.kp*e+p.ki*iN+D;
+  u=clamp(raw,-p.umax,p.umax);
+  if(!p.aw||raw===u)I=iN;
+  mf+=h*(m-mf)/tf;
+  if(i%st===0){o.t.push(i*h);o.y.push(x[0]);o.m.push(m);o.u.push(u)}
+  const k1=f(x,u),k2=f(add(x,k1,h/2),u),k3=f(add(x,k2,h/2),u),k4=f(add(x,k3,h),u);
+  x=x.map((v,j)=>v+h/6*(k1[j]+2*k2[j]+2*k3[j]+k4[j]));
+  if(!isFinite(x[0])||Math.abs(x[0])>1e9)break;
+ }
+ return o;
+}
+
+function met(o,r){
+ const{t,y}=o,n=y.length; let mx=-1e9; for(const v of y)mx=Math.max(mx,v);
+ const os=Math.max(0,(mx-r)/r*100),F=a=>{const i=y.findIndex(v=>v>=a*r);return i<0?null:t[i]};
+ const t1=F(.1),t9=F(.9),rise=t1==null||t9==null?null:t9-t1;
+ let li=-1;for(let i=n-1;i>=0;i--)if(Math.abs(y[i]-r)>.02*r){li=i;break}
+ const settle=li===n-1?null:(li<0?0:t[li+1]),ess=(r-y[n-1])/r*100;
+ let zc=0;for(let i=1;i<n;i++)if(i>n/2&&(y[i]-r)*(y[i-1]-r)<0)zc++;
+ return{os,rise,settle,ess,osc:settle==null&&zc>=4};
+}
+const metHTML=m=>`<div class="met"><div>Rise time (10–90%)<b>${fm(m.rise,3,' s')}</b></div><div>Overshoot<b>${fm(m.os,1,' %')}</b></div><div>Settling time (2%)<b>${fm(m.settle,2,' s')}</b></div><div>Steady-state error<b>${fm(m.ess,2,' %')}</b></div></div>${m.osc?'<p class="bad">The loop is oscillating (it never settles).</p>':''}`;
+
+function plot(id,ser,o={}){
+ const c=document.getElementById(id); if(!c||!c.clientWidth)return;
+ const d=devicePixelRatio||1,W=c.clientWidth,H=c.clientHeight; c.width=W*d; c.height=H*d;
+ const g=c.getContext('2d'); g.scale(d,d); const fg=getComputedStyle(c).color,L=44,B=22,T=22,R=8;
+ let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+ for(const s of ser)for(let i=0;i<s.x.length;i++){x0=Math.min(x0,s.x[i]);x1=Math.max(x1,s.x[i]);y0=Math.min(y0,s.y[i]);y1=Math.max(y1,s.y[i])}
+ (o.h||[]).forEach(v=>{y0=Math.min(y0,v);y1=Math.max(y1,v)});
+ if(y1-y0<1e-9){y1+=1;y0-=1} const pd=(y1-y0)*.06; y0-=pd; y1+=pd;
+ const X=v=>L+(v-x0)/(x1-x0||1)*(W-L-R), Y=v=>T+(1-(v-y0)/(y1-y0))*(H-T-B);
+ g.font='11px sans-serif'; g.fillStyle=fg; g.strokeStyle=fg; g.lineWidth=1;
+ for(let i=0;i<=4;i++){
+  const v=y0+(y1-y0)*i/4, xv=x0+(x1-x0)*i/4;
+  g.globalAlpha=.15; g.beginPath(); g.moveTo(L,Y(v)); g.lineTo(W-R,Y(v)); g.stroke();
+  g.globalAlpha=.75; g.fillText(v.toFixed(y1-y0<5?2:0),3,Y(v)+4); g.fillText(String(+xv.toFixed(2)),X(xv)-8,H-6);
+ }
+ g.globalAlpha=1; g.fillText(o.title||'',L,14);
+ (o.h||[]).forEach(v=>{g.strokeStyle='#dc2626';g.setLineDash([4,4]);g.beginPath();g.moveTo(L,Y(v));g.lineTo(W-R,Y(v));g.stroke()});
+ let lx=W-R;
+ for(const s of ser){g.strokeStyle=s.c;g.lineWidth=2;g.setLineDash(s.d?[6,4]:[]);g.beginPath();s.x.forEach((v,i)=>i?g.lineTo(X(v),Y(s.y[i])):g.moveTo(X(v),Y(s.y[i])));g.stroke()}
+ g.setLineDash([]);
+ for(const s of [...ser].reverse()){const w=g.measureText(s.n).width;lx-=w+16;g.fillStyle=s.c;g.fillRect(lx,6,10,3);g.fillStyle=fg;g.fillText(s.n,lx+13,12)}
+}
+
+const base={type:1,K:1,tau:1,wn:2,z:.5,kp:1,ki:0,kd:0,umax:20,r:1,ts:0,aw:true,T:8};
+const C={K:['Plant gain K',.1,5,.1,1],tau:['Time constant τ (s)',.1,5,.05,1],wn:['Natural frequency ωn (rad/s)',.5,8,.1,2],z:['Damping ζ',.1,1.5,.05,2],kp:['Kp',0,20,.1],ki:['Ki',0,20,.1],kd:['Kd',0,5,.05],umax:['Control limit ±umax',1,100,1],r:['Setpoint step',.5,5,.5],ts:['Sensor τs (s)',0,1.5,.01],T:['Simulation time (s)',2,30,1]};
+const S={p1:{...base,kp:9},p2:{...base,kp:3,ki:8,ts:.3,T:12}};
+const KEYS={p1:['type','K','tau','wn','z','kp','ki','kd','umax','r','T'],p2:['type','K','tau','wn','z','kp','ki','kd','ts','umax','T']};
+
+function ctls(id){
+ const s=S[id],el=$('#ctl-'+id); let h='';
+ for(const k of KEYS[id]){
+  if(k==='type')h+=`<label>Plant<select data-k="type"><option value="1" ${s.type==1?'selected':''}>First order K/(τs+1)</option><option value="2" ${s.type==2?'selected':''}>Second order (Module 3)</option></select></label>`;
+  else{const[n,a,b,st,t]=C[k];h+=`<label data-t="${t||''}">${n}: <b id="v-${id}-${k}">${+s[k].toFixed(3)}</b><input type="range" data-k="${k}" min="${a}" max="${b}" step="${st}" value="${s[k]}"></label>`}
+ }
+ el.innerHTML=h;
+ el.oninput=e=>{const k=e.target.dataset.k;if(!k)return;s[k]=+e.target.value;const v=$('#v-'+id+'-'+k);if(v)v.textContent=+s[k].toFixed(3);vis(id);run(id)};
+ vis(id);
+}
+function vis(id){document.querySelectorAll('#ctl-'+id+' [data-t]').forEach(l=>{if(l.dataset.t)l.style.display=(+S[id].type===+l.dataset.t)?'':'none'})}
+
+const PRED={
+ p1:{q:'If I double Kd (or set Kd = 1 when it is 0), the overshoot will…',mut:s=>({kd:s.kd?s.kd*2:1}),m:(o,s)=>met(o,s.r).os,tol:1,nm:'overshoot (%)'},
+ p2:{q:'If I double the sensor time constant τs (or set it to 0.3 s when it is 0), the overshoot will…',mut:s=>({ts:s.ts>.005?s.ts*2:.3}),m:(o,s)=>met(o,s.r).os,tol:1,nm:'overshoot (%)'}
+};
+function predHTML(id){return `<div class="box"><b>Predict, then check</b><p class="s" style="color:var(--fg)">${PRED[id].q}</p><select id="pr-${id}"><option value="up">increase</option><option value="dn">decrease</option><option value="same">stay about the same</option></select> <button class="btn" onclick="chk('${id}')">Check</button><p id="pro-${id}" class="s"></p></div>`}
+function chk(id){
+ const P=PRED[id],s=S[id],s2={...s,...P.mut(s)},a=P.m(sim(s),s),b=P.m(sim(s2),s2),dv=b-a,tol=Math.max(.03*Math.abs(a),P.tol);
+ const act=dv>tol?'up':dv<-tol?'dn':'same',w={up:'increase',dn:'decrease',same:'stay about the same'},got=$('#pr-'+id).value===act;
+ $('#pro-'+id).innerHTML=`<span class="${got?'ok':'bad'}">${got?'Your prediction matched.':'Not quite.'}</span> ${P.nm}: ${fm(a,2)} → ${fm(b,2)} (it did ${w[act]}).`;
+}
+
+const DIAG=`<svg viewBox="0 0 660 145" style="width:100%;max-width:660px;color:var(--fg)" fill="none" stroke="currentColor" stroke-width="1.5" font-size="13"><defs><marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="currentColor" stroke="none"/></marker></defs>
+<text x="4" y="45">r</text><line x1="18" y1="40" x2="60" y2="40" marker-end="url(#ar)"/><circle cx="74" cy="40" r="13"/><text x="66" y="35" font-size="11">+</text><text x="78" y="58" font-size="11">−</text>
+<line x1="87" y1="40" x2="125" y2="40" marker-end="url(#ar)"/><text x="98" y="33" font-size="11">e</text>
+<rect x="126" y="22" width="86" height="36"/><text x="155" y="45">PID</text><line x1="212" y1="40" x2="250" y2="40" marker-end="url(#ar)"/><text x="224" y="33" font-size="11">u</text>
+<rect x="251" y="22" width="76" height="36"/><text x="262" y="45">Limit ±U</text><line x1="327" y1="40" x2="365" y2="40" marker-end="url(#ar)"/>
+<rect x="366" y="22" width="92" height="36"/><text x="394" y="45">Plant</text><line x1="458" y1="40" x2="640" y2="40" marker-end="url(#ar)"/><text x="646" y="45">y</text>
+<line x1="555" y1="40" x2="555" y2="112"/><line x1="555" y1="112" x2="480" y2="112" marker-end="url(#ar)"/>
+<rect x="346" y="94" width="134" height="36"/><text x="355" y="117">Sensor 1/(τs s+1)</text>
+<line x1="346" y1="112" x2="74" y2="112"/><line x1="74" y1="112" x2="74" y2="54" marker-end="url(#ar)"/><text x="175" y="106" font-size="11">measured y (τs=0 in P1)</text></svg>`;
+
+function run(id){
+ if(id==='p1'){
+  const s=S.p1,o=sim(s);
+  plot('c1a',[{x:o.t,y:o.y,c:'#2563eb',n:'output y'},{x:o.t,y:o.t.map(()=>s.r),c:'#888',d:1,n:'setpoint'}],{title:'Output vs setpoint'});
+  plot('c1b',[{x:o.t,y:o.u,c:'#16a34a',n:'control u'}],{title:'Control signal (red = limit)',h:[s.umax,-s.umax]});
+  $('#m1').innerHTML=metHTML(met(o,s.r));
+ }
+ if(id==='p2'){
+  const s=S.p2,o=sim(s);
+  plot('c2a',[{x:o.t,y:o.y,c:'#2563eb',n:'true output'},{x:o.t,y:o.m,c:'#e67e22',n:'what the sensor reports'},{x:o.t,y:o.t.map(()=>s.r),c:'#888',d:1,n:'setpoint'}],{title:'True output vs sensor reading'});
+  plot('c2b',[{x:o.t,y:o.u,c:'#16a34a',n:'control u'}],{title:'Control signal',h:[s.umax,-s.umax]});
+  $('#m2').innerHTML=metHTML(met(o,s.r))+`<p class="s">Metrics use the true output. The controller only sees the sensor.</p>`;
+ }
+}
+
+function runVal(){
+ const b={...base,umax:1000,aw:true},r=[];
+ let o=sim({...b,kp:9,T:3}),m=met(o,1),yss=o.y[o.y.length-1],i=o.y.findIndex(v=>v>=.632*yss);
+ r.push(['1. P only, Kp = 9','closed-loop τ = 0.1 s, steady-state error = 10%',`τ ≈ ${fm(o.t[i],3,' s')}, error = ${fm(m.ess,2,' %')}`,Math.abs(o.t[i]-.1)<.01&&Math.abs(m.ess-10)<.5]);
+ const wn=Math.sqrt(1*1/1),z=(1+1*1)/(2*Math.sqrt(1*1*1)); o=sim({...b,kp:1,ki:1,T:3}); m=met(o,1); const y1=o.y[Math.round(o.y.length/3)];
+ r.push(['2. PI, Kp = 1, Ki = 1',`ωn = ${wn} rad/s, ζ = ${z}`,`ωn = ${fm(wn,2)}, ζ = ${fm(z,2)}; sim: OS = ${fm(m.os,2,' %')}, y(1 s) = ${fm(y1,3)}`,Math.abs(wn-1)<1e-9&&Math.abs(z-1)<1e-9&&m.os<.5&&Math.abs(y1-.632)<.01]);
+ o=sim({...b,kp:2,ki:3,T:15}); m=met(o,1);
+ r.push(['3. Any PI (Kp = 2, Ki = 3)','zero steady-state error',`error = ${fm(m.ess,4,' %')}`,Math.abs(m.ess)<.01]);
+ $('#valtab').innerHTML='<tr><th>Check</th><th>Expected</th><th>Measured</th><th></th></tr>'+r.map(x=>`<tr><td>${x[0]}</td><td>${x[1]}</td><td>${x[2]}</td><td class="${x[3]?'ok':'bad'}">${x[3]?'PASS':'FAIL'}</td></tr>`).join('');
+}
+
+const TABS=[['p1','P1 PID playground'],['p2','P2 Slow sensor'],['val','Validation']];
+const sec=(id,t,d,b)=>`<section id="s-${id}"><h2>${t}</h2><p class="s">${d}</p><div class="row"><div class="ctl" id="ctl-${id}"></div><div>${b}</div></div></section>`;
+$('#app').innerHTML=
+ `<section id="s-p1"><h2>P1 PID playground</h2><p class="s">Pick a plant, set the gains and a setpoint step, and watch the loop.</p>${DIAG}<div class="row"><div class="ctl" id="ctl-p1"></div><div><canvas id="c1a"></canvas><canvas id="c1b"></canvas><div id="m1"></div>${predHTML('p1')}</div></div></section>`+
+ sec('p2','P2 A slow sensor in the loop','The controller only controls what the sensor reports. Raise τs and watch the true output (blue) leave what the sensor shows (orange).','<canvas id="c2a"></canvas><canvas id="c2b"></canvas><div id="m2"></div>'+predHTML('p2'))+
+ `<section id="s-val"><h2>Validation checks</h2><p class="s">Plant K = 1, τ = 1 s. These run the RK4 simulator.</p><table id="valtab"></table></section>`;
+
+$('#nav').innerHTML=TABS.map(t=>`<button data-t="${t[0]}">${t[1]}</button>`).join('');
+function show(t){
+ document.querySelectorAll('section').forEach(s=>s.classList.toggle('on',s.id==='s-'+t));
+ document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+ if(['p1','p2'].includes(t))run(t);
+ if(t==='val')runVal();
+ location.hash=t;
+}
+$('#nav').onclick=e=>{if(e.target.dataset.t)show(e.target.dataset.t)};
+['p1','p2'].forEach(ctls);
+addEventListener('resize',()=>{const t=document.querySelector('nav button.on');if(t)show(t.dataset.t)});
+show(TABS.some(t=>t[0]===location.hash.slice(1))?location.hash.slice(1):'p1');
+</script>
+</body>
+</html>
