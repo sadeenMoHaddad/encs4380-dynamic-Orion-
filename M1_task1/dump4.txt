@@ -1,0 +1,38 @@
+mm: HAL ENCS4380-2026/27-S1, team T13, sim, maze 4x4, goal (1,1)-(2,2)
+task1: maze 4x4, goal (1,1)-(2,2)
+(0,0) facing N: L=1 F=0 R=1  ->  W=1 N=0 E=1
+(0,1) facing N: L=1 F=0 R=1  ->  W=1 N=0 E=1
+(0,2) facing N: L=1 F=0 R=1  ->  W=1 N=0 E=1
+(0,3) facing N: L=1 F=1 R=0  ->  W=1 N=1 E=0
+(1,3) facing E: L=1 F=0 R=0  ->  N=1 E=0 S=0
+(2,3) facing E: L=1 F=0 R=1  ->  N=1 E=0 S=1
+(3,3) facing E: L=1 F=1 R=0  ->  N=1 E=1 S=0
+(3,2) facing S: L=1 F=0 R=1  ->  E=1 S=0 W=1
+(3,1) facing S: L=1 F=0 R=0  ->  E=1 S=0 W=0
+(3,0) facing S: L=1 F=1 R=0  ->  E=1 S=1 W=0
+(2,0) facing W: L=1 F=0 R=1  ->  S=1 W=0 N=1
+(1,0) facing W: L=1 F=1 R=0  ->  S=1 W=1 N=0
+(1,1) facing N: L=1 F=0 R=0  ->  W=1 N=0 E=0
+(1,2) facing N: L=1 F=0 R=1  ->  W=1 N=0 E=1
+(2,1) facing E: L=0 F=0 R=1  ->  N=0 E=0 S=1
+(2,2) facing N: L=1 F=1 R=1  ->  W=1 N=1 E=1
+(0,0) facing S: L=1 F=1 R=1  ->  E=1 S=1 W=1
+task1: 16 of 16 cells visited, 30 cells driven, now at (0,0) facing S
+@MAP ENCS4380-2026/27-S1 team=T13 platform=sim w=4 h=4
+@C 0 0 0 1 1 1
+@C 1 0 0 0 1 1
+@C 2 0 1 0 1 0
+@C 3 0 0 1 1 0
+@C 0 1 0 1 0 1
+@C 1 1 0 0 0 1
+@C 2 1 0 0 1 0
+@C 3 1 0 1 0 0
+@C 0 2 0 1 0 1
+@C 1 2 0 1 0 1
+@C 2 2 1 1 0 1
+@C 3 2 0 1 0 1
+@C 0 3 1 0 0 1
+@C 1 3 1 0 0 0
+@C 2 3 1 0 1 0
+@C 3 3 1 1 0 0
+@END n=16 crc=32F8

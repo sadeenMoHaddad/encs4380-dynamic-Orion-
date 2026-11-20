@@ -1,0 +1,134 @@
+mm: HAL ENCS4380-2026/27-S1, team T13, sim, maze 8x8, goal (3,3)-(4,4)
+task1: maze 8x8, goal (3,3)-(4,4)
+(0,0) facing N: L=1 F=0 R=1  ->  W=1 N=0 E=1
+(0,1) facing N: L=1 F=1 R=0  ->  W=1 N=1 E=0
+(1,1) facing E: L=1 F=1 R=0  ->  N=1 E=1 S=0
+(1,0) facing S: L=0 F=1 R=1  ->  E=0 S=1 W=1
+(2,0) facing E: L=0 F=1 R=1  ->  N=0 E=1 S=1
+(2,1) facing N: L=1 F=0 R=1  ->  W=1 N=0 E=1
+(2,2) facing N: L=1 F=0 R=1  ->  W=1 N=0 E=1
+(2,3) facing N: L=0 F=1 R=1  ->  W=0 N=1 E=1
+(1,3) facing W: L=1 F=0 R=1  ->  S=1 W=0 N=1
+(0,3) facing W: L=0 F=1 R=0  ->  S=0 W=1 N=0
+(0,4) facing N: L=1 F=0 R=1  ->  W=1 N=0 E=1
+(0,5) facing N: L=1 F=0 R=1  ->  W=1 N=0 E=1
+(0,6) facing N: L=1 F=0 R=1  ->  W=1 N=0 E=1
+(0,7) facing N: L=1 F=1 R=0  ->  W=1 N=1 E=0
+(1,7) facing E: L=1 F=0 R=1  ->  N=1 E=0 S=1
+(2,7) facing E: L=1 F=1 R=0  ->  N=1 E=1 S=0
+(2,6) facing S: L=0 F=1 R=1  ->  E=0 S=1 W=1
+(3,6) facing E: L=1 F=1 R=0  ->  N=1 E=1 S=0
+(3,5) facing S: L=1 F=1 R=0  ->  E=1 S=1 W=0
+(2,5) facing W: L=0 F=1 R=1  ->  S=0 W=1 N=1
+(2,4) facing S: L=0 F=1 R=0  ->  E=0 S=1 W=0
+(1,4) facing W: L=1 F=1 R=0  ->  S=1 W=1 N=0
+(1,5) facing N: L=1 F=0 R=1  ->  W=1 N=0 E=1
+(1,6) facing N: L=1 F=1 R=1  ->  W=1 N=1 E=1
+(3,4) facing E: L=1 F=1 R=0  ->  N=1 E=1 S=0
+(3,3) facing S: L=1 F=0 R=1  ->  E=1 S=0 W=1
+(3,2) facing S: L=0 F=0 R=1  ->  E=0 S=0 W=1
+(3,1) facing S: L=0 F=0 R=1  ->  E=0 S=0 W=1
+(3,0) facing S: L=0 F=1 R=1  ->  E=0 S=1 W=1
+(4,0) facing E: L=1 F=0 R=1  ->  N=1 E=0 S=1
+(5,0) facing E: L=0 F=0 R=1  ->  N=0 E=0 S=1
+(6,0) facing E: L=1 F=0 R=1  ->  N=1 E=0 S=1
+(7,0) facing E: L=0 F=1 R=1  ->  N=0 E=1 S=1
+(7,1) facing N: L=1 F=0 R=1  ->  W=1 N=0 E=1
+(7,2) facing N: L=0 F=1 R=1  ->  W=0 N=1 E=1
+(6,2) facing W: L=1 F=0 R=0  ->  S=1 W=0 N=0
+(5,2) facing W: L=0 F=0 R=1  ->  S=0 W=0 N=1
+(4,2) facing W: L=1 F=0 R=1  ->  S=1 W=0 N=1
+(5,1) facing S: L=0 F=0 R=0  ->  E=0 S=0 W=0
+(4,1) facing W: L=1 F=0 R=1  ->  S=1 W=0 N=1
+(6,1) facing E: L=1 F=1 R=1  ->  N=1 E=1 S=1
+(6,3) facing N: L=1 F=1 R=0  ->  W=1 N=1 E=0
+(7,3) facing E: L=0 F=1 R=1  ->  N=0 E=1 S=1
+(7,4) facing N: L=1 F=0 R=1  ->  W=1 N=0 E=1
+(7,5) facing N: L=0 F=1 R=1  ->  W=0 N=1 E=1
+(6,5) facing W: L=1 F=1 R=0  ->  S=1 W=1 N=0
+(6,6) facing N: L=1 F=0 R=1  ->  W=1 N=0 E=1
+(6,7) facing N: L=0 F=1 R=0  ->  W=0 N=1 E=0
+(7,7) facing E: L=1 F=1 R=0  ->  N=1 E=1 S=0
+(7,6) facing S: L=1 F=1 R=1  ->  E=1 S=1 W=1
+(5,7) facing W: L=1 F=0 R=1  ->  S=1 W=0 N=1
+(4,7) facing W: L=0 F=0 R=1  ->  S=0 W=0 N=1
+(3,7) facing W: L=1 F=1 R=1  ->  S=1 W=1 N=1
+(4,6) facing S: L=1 F=0 R=1  ->  E=1 S=0 W=1
+(4,5) facing S: L=0 F=0 R=1  ->  E=0 S=0 W=1
+(4,4) facing S: L=1 F=0 R=1  ->  E=1 S=0 W=1
+(4,3) facing S: L=0 F=1 R=1  ->  E=0 S=1 W=1
+(5,3) facing E: L=0 F=1 R=1  ->  N=0 E=1 S=1
+(5,4) facing N: L=1 F=0 R=0  ->  W=1 N=0 E=0
+(5,5) facing N: L=0 F=0 R=1  ->  W=0 N=0 E=1
+(5,6) facing N: L=1 F=1 R=1  ->  W=1 N=1 E=1
+(6,4) facing E: L=1 F=1 R=1  ->  N=1 E=1 S=1
+(0,2) facing S: L=0 F=1 R=1  ->  E=0 S=1 W=1
+(1,2) facing E: L=1 F=1 R=1  ->  N=1 E=1 S=1
+(0,0) facing S: L=1 F=1 R=1  ->  E=1 S=1 W=1
+task1: 64 of 64 cells visited, 126 cells driven, now at (0,0) facing S
+@MAP ENCS4380-2026/27-S1 team=T13 platform=sim w=8 h=8
+@C 0 0 0 1 1 1
+@C 1 0 0 0 1 1
+@C 2 0 0 1 1 0
+@C 3 0 0 0 1 1
+@C 4 0 1 0 1 0
+@C 5 0 0 0 1 0
+@C 6 0 1 0 1 0
+@C 7 0 0 1 1 0
+@C 0 1 1 0 0 1
+@C 1 1 1 1 0 0
+@C 2 1 0 1 0 1
+@C 3 1 0 0 0 1
+@C 4 1 1 0 1 0
+@C 5 1 0 0 0 0
+@C 6 1 1 1 1 0
+@C 7 1 0 1 0 1
+@C 0 2 0 0 1 1
+@C 1 2 1 1 1 0
+@C 2 2 0 1 0 1
+@C 3 2 0 0 0 1
+@C 4 2 1 0 1 0
+@C 5 2 1 0 0 0
+@C 6 2 0 0 1 0
+@C 7 2 1 1 0 0
+@C 0 3 0 0 0 1
+@C 1 3 1 0 1 0
+@C 2 3 1 1 0 0
+@C 3 3 0 1 0 1
+@C 4 3 0 0 1 1
+@C 5 3 0 1 1 0
+@C 6 3 1 0 0 1
+@C 7 3 0 1 1 0
+@C 0 4 0 1 0 1
+@C 1 4 0 0 1 1
+@C 2 4 0 0 1 0
+@C 3 4 1 1 0 0
+@C 4 4 0 1 0 1
+@C 5 4 0 0 0 1
+@C 6 4 1 1 1 0
+@C 7 4 0 1 0 1
+@C 0 5 0 1 0 1
+@C 1 5 0 1 0 1
+@C 2 5 1 0 0 1
+@C 3 5 0 1 1 0
+@C 4 5 0 0 0 1
+@C 5 5 0 1 0 0
+@C 6 5 0 0 1 1
+@C 7 5 1 1 0 0
+@C 0 6 0 1 0 1
+@C 1 6 1 1 0 1
+@C 2 6 0 0 1 1
+@C 3 6 1 1 0 0
+@C 4 6 0 1 0 1
+@C 5 6 1 1 0 1
+@C 6 6 0 1 0 1
+@C 7 6 0 1 1 1
+@C 0 7 1 0 0 1
+@C 1 7 1 0 1 0
+@C 2 7 1 1 0 0
+@C 3 7 1 0 1 1
+@C 4 7 1 0 0 0
+@C 5 7 1 0 1 0
+@C 6 7 1 0 0 0
+@C 7 7 1 1 0 0
+@END n=64 crc=8106
