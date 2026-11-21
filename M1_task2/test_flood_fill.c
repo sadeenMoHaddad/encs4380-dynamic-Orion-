@@ -250,6 +250,145 @@ static int test_new_wall_update(void)
     return 0;
 }
 
+/* Create a completely open maze. */
+static void make_open_maze(int width, int height)
+{
+    int x, y;
+
+    clear_map();
+
+    for (x = 0; x < width; x++) {
+        for (y = 0; y < height; y++) {
+
+            if (x < width - 1)
+                set_side(width, height, x, y, FF_EAST, 0);
+
+            if (y < height - 1)
+                set_side(width, height, x, y, FF_NORTH, 0);
+        }
+    }
+}
+
+
+/* Test 10: Non-square maze (3x2). */
+static int test_non_square_maze(void)
+{
+    make_open_maze(3, 2);
+
+    if (!ff_compute_explore(3, 2, walls, known,
+                            2, 1, 2, 1, dist))
+        return fail("non-square BFS failed");
+
+    if (dist[0][0] != 3 ||
+        dist[1][0] != 2 ||
+        dist[2][0] != 1 ||
+        dist[2][1] != 0)
+        return fail("incorrect distances in non-square maze");
+
+    return 0;
+}
+
+
+/* Test 11: Goal located at a corner. */
+static int test_corner_goal(void)
+{
+    make_open_maze(4, 4);
+
+    if (!ff_compute_explore(4, 4, walls, known,
+                            0, 0, 0, 0, dist))
+        return fail("corner goal BFS failed");
+
+    if (dist[0][0] != 0 ||
+        dist[0][3] != 3 ||
+        dist[3][0] != 3 ||
+        dist[3][3] != 6)
+        return fail("incorrect distances with corner goal");
+
+    return 0;
+}
+
+
+/* Test 12: Completely open maximum-size maze (16x16). */
+static int test_open_16x16_maze(void)
+{
+    int x, y;
+
+    make_open_maze(16, 16);
+
+    if (!ff_compute_explore(16, 16, walls, known,
+                            15, 15, 15, 15, dist))
+        return fail("16x16 BFS computation failed");
+
+    if (dist[0][0] != 30)
+        return fail("incorrect distance at 16x16 start");
+
+    if (dist[15][15] != 0)
+        return fail("incorrect distance at 16x16 goal");
+
+    /* Every cell must be reachable with Manhattan distance. */
+    for (x = 0; x < 16; x++) {
+        for (y = 0; y < 16; y++) {
+            int expected = (15 - x) + (15 - y);
+
+            if (dist[x][y] != expected)
+                return fail("incorrect or unreachable cell in 16x16 maze");
+        }
+    }
+
+    return 0;
+}
+
+
+/* Test 13: Conflicting wall information from two cells. */
+static int test_conflicting_shared_wall(void)
+{
+    clear_map();
+
+    /*
+     * Cell (0,0) says EAST is open.
+     * Cell (1,0) says WEST is a wall.
+     */
+
+    known[0][0] |= FF_WALL(FF_EAST);
+    known[1][0] |= FF_WALL(FF_WEST);
+
+    walls[0][0] &= (uint8_t)~FF_WALL(FF_EAST);
+    walls[1][0] |= FF_WALL(FF_WEST);
+
+    if (!ff_compute_explore(2, 1, walls, known,
+                            1, 0, 1, 0, dist))
+        return fail("conflicting wall BFS failed");
+
+    if (dist[0][0] != -1)
+        return fail("crossed a conflicting shared wall");
+
+    return 0;
+}
+
+
+/* Test 14: All cells in an open maze must be reachable. */
+static int test_all_cells_reachable(void)
+{
+    int x, y;
+
+    make_open_maze(5, 5);
+
+    if (!ff_compute_explore(5, 5, walls, known,
+                            2, 2, 2, 2, dist))
+        return fail("all-cells reachability BFS failed");
+
+    for (x = 0; x < 5; x++) {
+        for (y = 0; y < 5; y++) {
+
+            if (dist[x][y] < 0)
+                return fail("reachable cell incorrectly marked unreachable");
+        }
+    }
+
+    return 0;
+}
+
+
 
 int main(void)
 {
@@ -263,6 +402,15 @@ int main(void)
     if (test_invalid_input()) return 1;
     if (test_new_wall_update()) return 1;
 
-    puts("PASS: all 9 Flood Fill tests passed.");
+    /* Additional hardening tests */
+    if (test_non_square_maze()) return 1;
+    if (test_corner_goal()) return 1;
+    if (test_open_16x16_maze()) return 1;
+    if (test_conflicting_shared_wall()) return 1;
+    if (test_all_cells_reachable()) return 1;
+
+    puts("PASS: all 14 Flood Fill tests passed.");
+
     return 0;
 }
+
