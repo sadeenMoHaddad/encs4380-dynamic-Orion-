@@ -69,21 +69,7 @@ static bool maze_init(void)
     return true;
 }
 
-static void map_init(void)
-{
-    int x, y;
-    memset(g_walls, 0, sizeof g_walls);
-    memset(g_known, 0, sizeof g_known);
-    memset(g_visited, 0, sizeof g_visited);
-    for (x = 0; x < g_w; x++) {
-        for (y = 0; y < g_h; y++) {
-            if (y == g_h - 1) g_walls[x][y] |= MM_WALL(MM_NORTH);
-            if (x == g_w - 1) g_walls[x][y] |= MM_WALL(MM_EAST);
-            if (y == 0)       g_walls[x][y] |= MM_WALL(MM_SOUTH);
-            if (x == 0)       g_walls[x][y] |= MM_WALL(MM_WEST);
-        }
-    }
-}
+
 
 static void map_set_side(int x, int y, int d, bool wall)
 {
@@ -215,7 +201,8 @@ static bool refine_path(void)
         if (!go_exploring(g_gx0, g_gy0, g_gx1, g_gy1)) return false;
         if (!go_exploring(0, 0, 0, 0))                 return false;
     }
-    return true;
+   mm_log("task3: refinement did not converge");
+return false;
 }
 
 static bool speed_run(void)
