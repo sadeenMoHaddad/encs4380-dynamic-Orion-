@@ -1,5 +1,5 @@
 /*
- * solver_task1.c - Team T00 - Task 1: map and position
+ * solver.c (M1 Task 1) - Team T13 - Task 1: map and position
  *
  * Task 1 only, nothing else:
  *   1. a wall map, 4 bits per cell, written with MM_WALL(dir) only,
@@ -15,7 +15,10 @@
  * whole maze. (Task 2 replaces this walk with flood fill.)
  *
  * Build in mms with:
- *   gcc -O2 -std=c99 -o solver.exe main_sim.c hal_sim.c mm_common.c solver_task1.c
+ *   gcc -O2 -std=c99 -o solver.exe main_sim.c hal_sim.c mm_common.c solver.c \
+ *       flood_fill.c flood_fill_display.c
+ * (flood_fill.* and flood_fill_display.* come from M1_task2; they show the
+ *  flood-fill distance to the goal on every cell after it is sensed.)
  */
 #include "mouse_hal.h"
 #include "flood_fill.h"
