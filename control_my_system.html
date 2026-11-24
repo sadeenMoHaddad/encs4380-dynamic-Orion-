@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My system: Micromouse drive-motor speed loop</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <link rel="stylesheet" href="control.css">
+</head>
+<body>
+<nav id="nav" aria-label="Control navigation"></nav>
+
+<h1>My system: the Micromouse drive-motor speed loop</h1>
+<p class="lead">Our course project is a Micromouse. Each wheel is driven by a DC gear motor through a PWM motor driver,
+and an encoder measures the wheel. From PWM command (in %) to wheel speed (in mm/s) the motor behaves like a
+first-order plant, so P1–P3 apply directly. This page finds K and τ from a PWM step test and designs the speed loop.</p>
+
+<div id="sourceBanner"></div>
+
+<section class="panel">
+  <h2>1. The plant model and where its numbers come from</h2>
+  <p class="formula">G(s) = v(s) / PWM(s) = K / (τ·s + 1)     K in (mm/s) per % PWM,  τ in s</p>
+  <p><b>The test:</b> hold the mouse with its wheels off the ground, step the PWM from 0 to a fixed value, and log
+  the encoder speed every 5 ms. K is the final speed divided by the PWM step; τ is the time to reach 63.2% of the
+  final speed (Module 1).</p>
+  <details><summary>Arduino step-test logger (copy, set the pins, run, then copy the Serial Monitor output)</summary>
+    <button type="button" id="copyLogger" class="primary">Copy code</button>
+    <pre id="logger"></pre>
+  </details>
+  <h3>Fit K and τ from your log</h3>
+  <p class="note">Paste the logged lines <code>t_ms,pwm,speed_mm_s</code> (the header line is skipped).</p>
+  <textarea id="data" rows="6" placeholder="t_ms,pwm,speed_mm_s&#10;0,0,0&#10;5,40,3.1&#10;..."></textarea>
+  <button type="button" id="fit" class="primary">Fit K and τ</button>
+  <span id="fitResult"></span>
+  <div id="plotFit"></div>
+  <table id="modelTable"></table>
+</section>
+
+<section class="panel">
+  <h2>2. The spec, and why it matters for the mouse</h2>
+  <table>
+    <tr><th>Requirement</th><th>Value</th><th>Why</th></tr>
+    <tr><td>Damping ratio ζ</td><td>0.6 ≤ ζ ≤ 0.8 (design for 0.7)</td>
+      <td>The practical range from the lecture: fast, with only a few % overshoot. Too little damping makes the
+      wheels surge and slip; too much makes every move slow.</td></tr>
+    <tr><td>Settling time (2%)</td><td>≤ <span id="tsSpec"></span> s</td>
+      <td>The mouse speeds up and slows down for every cell (180 mm). The wheel speed must follow its profile
+      within a fraction of a cell.</td></tr>
+    <tr><td>Steady-state error</td><td>0</td><td>Both wheels must hold the same speed or the mouse drifts sideways:
+      a PI controller removes the error.</td></tr>
+    <tr><td>PWM command</td><td>0–100 %</td><td>The driver cannot give more than full duty, and we do not reverse
+      the motor during a forward speed step.</td></tr>
+    <tr><td>Speed step</td><td><span id="rSpec"></span> mm/s</td><td>A typical cruise speed between cells.</td></tr>
+  </table>
+</section>
+
+<div class="layout">
+  <section class="panel controls" id="ctl">
+    <h3>3. Design</h3>
+    <label>Target ζ = <b data-v="zeta"></b></label>
+    <input type="range" data-k="zeta" min="0.4" max="1" step="0.05">
+    <label>Target settling time = <b data-v="ts"></b> s</label>
+    <input type="range" data-k="ts" min="0.05" max="1" step="0.01">
+    <label>Speed step = <b data-v="r"></b> mm/s</label>
+    <input type="range" data-k="r" min="50" max="600" step="10">
+    <label>Controller sampling time Ts = <b data-v="Ts"></b> s</label>
+    <input type="range" data-k="Ts" min="0.002" max="0.05" step="0.001">
+    <button type="button" id="design" class="primary">Design PI from ζ and settling time</button>
+    <label>Kp = <b data-v="kp"></b> (% PWM per mm/s)</label>
+    <input type="range" data-k="kp" min="0" max="2" step="0.001">
+    <label>Ki = <b data-v="ki"></b></label>
+    <input type="range" data-k="ki" min="0" max="40" step="0.01">
+  </section>
+  <section>
+    <div class="formula">PI on a first-order plant: closed loop τs² + (1 + K·Kp)s + K·Ki = 0<br>
+      ωn = √(K·Ki/τ),  ζ = (1 + K·Kp) / (2·√(τ·K·Ki))<br>
+      Design: ωn = 4/(ζ·ts),  Ki = ωn²·τ/K,  Kp = (2ζωn·τ − 1)/K</div>
+    <div id="plotV"></div>
+    <div id="plotPwm"></div>
+    <div id="metrics"></div>
+    <table id="checks"></table>
+    <div id="predict"></div>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>Arduino code for our speed loop</h2>
+  <p class="note">The digital PID of P3 with our gains, Ts and the 0–100 % PWM limit. Fill in the two TODO lines
+  for your encoder and motor driver pins.</p>
+  <button type="button" id="copy" class="primary">Copy code</button>
+  <pre id="code"></pre>
+</section>
+
+<script src="control_lib.js"></script>
+<script>
+  /* ====== OUR MEASURED MOTOR: edit these after the step test ======================
+   * K   : (mm/s) per % PWM, tau : s.  Leave them null until the test is done: the page
+   * then uses a clearly marked placeholder.
+   */
+  const MY_MOTOR = {
+    K: null,
+    tau: null,
+    source: "",          // e.g. "PWM 0 -> 40 % step test, left wheel, logged 2026-11-25"
+  };
+  const PLACEHOLDER = { K: 6, tau: 0.08 };   // NOT measured: a typical small gear motor
+
+  CL.nav("control_my_system.html");
+  const measured = MY_MOTOR.K != null && MY_MOTOR.tau != null;
+  const motor = measured ? { K: MY_MOTOR.K, tau: MY_MOTOR.tau } : Object.assign({}, PLACEHOLDER);
+  let motorSource = measured ? MY_MOTOR.source || "our step test" : "placeholder";
+
+  const s = { zeta: 0.7, ts: 0.3, r: 300, Ts: 0.01, kp: 0, ki: 0 };
+
+  function banner() {
+    CL.$("sourceBanner").innerHTML = motorSource === "placeholder"
+      ? `<div class="warn"><b>⚠ Placeholder numbers.</b> K = ${PLACEHOLDER.K} (mm/s)/%, τ = ${PLACEHOLDER.tau} s are
+         <b>not</b> measured on our motor. Run the step test below, then put the fitted values in
+         <code>MY_MOTOR</code> at the top of this page's script.</div>`
+      : `<div class="panel"><b>Motor model from ${motorSource}:</b> K = ${(+motor.K).toFixed(3)} (mm/s)/%,
+         τ = ${(+motor.tau).toFixed(4)} s.</div>`;
+    CL.$("modelTable").innerHTML = `<tr><th>Parameter</th><th>Value</th><th>Source</th></tr>
+      <tr><td>K</td><td>${(+motor.K).toFixed(3)} (mm/s) per % PWM</td><td>${motorSource}</td></tr>
+      <tr><td>τ</td><td>${(+motor.tau).toFixed(4)} s</td><td>${motorSource}</td></tr>
+      <tr><td>Top speed at 100 % PWM</td><td>${(100 * motor.K).toFixed(0)} mm/s</td><td>K × 100</td></tr>`;
+  }
+
+  // PI design for a first-order plant from target ζ and settling time.
+  function design() {
+    const wn = 4 / (s.zeta * s.ts);
+    s.ki = wn * wn * motor.tau / motor.K;
+    s.kp = Math.max(0, (2 * s.zeta * wn * motor.tau - 1) / motor.K);
+    refresh(); update();
+  }
+
+  function params(over) {
+    return Object.assign({ type: "1", K: motor.K, tau: motor.tau, kd: 0, umin: 0, umax: 100,
+      aw: true, r: s.r, kp: s.kp, ki: s.ki, Ts: 0, T: Math.max(1, 4 * s.ts) }, over || {});
+  }
+
+  function update() {
+    CL.$("tsSpec").textContent = s.ts.toFixed(2);
+    CL.$("rSpec").textContent = s.r;
+    const cont = CL.simulate(params());
+    const dig = CL.simulate(params({ Ts: s.Ts }));
+    const m = CL.metrics(dig, s.r);
+    const T = params().T;
+    CL.plot("plotV", [
+      { x: dig.t, y: dig.y, name: `wheel speed, digital PI (Ts = ${s.Ts} s)`, line: { color: "#2563eb", width: 2.5 } },
+      { x: cont.t, y: cont.y, name: "continuous PI", line: { color: "#6b7280", width: 1.5 } },
+      { x: [0, T], y: [s.r, s.r], name: "speed setpoint", line: { color: "#111827", dash: "dot", width: 1 } },
+    ], { title: "Simulated speed response", xaxis: { title: "time (s)" }, yaxis: { title: "speed (mm/s)" } });
+    const ut = dig.uSteps.t.concat([T]), uu = dig.uSteps.u.concat([dig.uSteps.u[dig.uSteps.u.length - 1]]);
+    CL.plot("plotPwm", [
+      { x: ut, y: uu, name: "PWM command", line: { color: "#16a34a", width: 2, shape: "hv" } },
+      { x: [0, T], y: [100, 100], name: "0–100 % limits", line: { color: "#dc2626", dash: "dot" } },
+      { x: [0, T], y: [0, 0], showlegend: false, line: { color: "#dc2626", dash: "dot" } },
+    ], { title: "PWM command (%)", height: 250, xaxis: { title: "time (s)" }, yaxis: { title: "PWM (%)" } });
+    CL.$("metrics").innerHTML = CL.metricsHTML(m);
+
+    // Check the design against the spec.
+    const wn = Math.sqrt(motor.K * s.ki / motor.tau);
+    const zeta = s.ki > 0 ? (1 + motor.K * s.kp) / (2 * Math.sqrt(motor.tau * motor.K * s.ki)) : Infinity;
+    const raw = CL.simulate(params({ Ts: s.Ts, umin: -1e9, umax: 1e9 }));
+    const uMax = Math.max(...raw.uSteps.u), uMin = Math.min(...raw.uSteps.u);
+    const rows = [
+      ["ζ of the closed loop", `${CL.fmt(zeta, 3)} (ωn = ${CL.fmt(wn, 1)} rad/s)`, zeta >= 0.6 && zeta <= 0.8],
+      ["Settling time ≤ spec", m.oscillating ? "not settled" : CL.fmt(m.settle, 3, " s"), !m.oscillating && m.settle <= s.ts * 1.05],
+      ["Steady-state error = 0", CL.fmt(m.ess, 3, " %"), !m.oscillating && Math.abs(m.ess) < 0.5],
+      ["PWM stays within 0–100 % (unclipped)", `${CL.fmt(uMin, 1)} … ${CL.fmt(uMax, 1)} %`, uMin >= -1e-6 && uMax <= 100],
+      ["Overshoot (PI zero adds some)", CL.fmt(m.os, 1, " %"), m.os <= 15],
+    ];
+    CL.$("checks").innerHTML = "<tr><th>Check</th><th>Value</th><th></th></tr>" + rows.map(r =>
+      `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="${r[2] ? "ok" : "bad"}">${r[2] ? "PASS" : "FAIL"}</td></tr>`).join("");
+
+    CL.$("code").textContent = CL.arduinoCode({ kp: s.kp, ki: s.ki, kd: 0, Ts: s.Ts, umin: 0, umax: 100,
+      aw: true, r: s.r,
+      readLine: "return readWheelSpeedMmPerS();   // TODO: encoder ticks in the last Ts * mm per tick / Ts",
+      writeLine: "analogWrite(PIN_MOTOR_PWM, (int)(u * 2.55));   // TODO: your driver pin; 100 % -> 255",
+      setupLine: "pinMode(PIN_MOTOR_PWM, OUTPUT);   // TODO: encoder interrupt, driver direction pins" });
+  }
+
+  // Fit K and tau from a pasted step-test log: columns t_ms, pwm, speed.
+  function fit() {
+    const rows = CL.$("data").value.split(/\r?\n/).map(l => l.split(/[,;\s]+/).map(Number))
+      .filter(r => r.length >= 3 && r.slice(0, 3).every(isFinite));
+    if (rows.length < 10) { CL.$("fitResult").innerHTML = '<span class="bad">Need at least 10 data lines.</span>'; return; }
+    const t = rows.map(r => r[0] / 1000), pwm = rows.map(r => r[1]), v = rows.map(r => r[2]);
+    const k0 = pwm.findIndex(p => p > pwm[0]);
+    if (k0 < 1) { CL.$("fitResult").innerHTML = '<span class="bad">No PWM step found in the log.</span>'; return; }
+    const before = v.slice(0, k0).reduce((a, b) => a + b, 0) / k0;
+    const tail = v.slice(Math.floor(v.length * 0.8));
+    const after = tail.reduce((a, b) => a + b, 0) / tail.length;
+    const dPwm = pwm[pwm.length - 1] - pwm[0];
+    const level = before + 0.632 * (after - before);
+    const k63 = v.findIndex((x, i) => i >= k0 && x >= level);
+    if (k63 < 0 || dPwm <= 0) { CL.$("fitResult").innerHTML = '<span class="bad">Could not find 63.2% of the change.</span>'; return; }
+    motor.K = (after - before) / dPwm;
+    motor.tau = t[k63] - t[k0];
+    motorSource = `the pasted step test (${rows.length} samples, PWM step ${dPwm} %)`;
+    CL.$("fitResult").innerHTML = `<span class="ok">K = ${motor.K.toFixed(3)} (mm/s)/%, τ = ${motor.tau.toFixed(4)} s.</span>
+      Put these numbers in <code>MY_MOTOR</code> so the page keeps them.`;
+    const model = t.map(x => x < t[k0] ? before : before + motor.K * dPwm * (1 - Math.exp(-(x - t[k0]) / motor.tau)));
+    CL.plot("plotFit", [
+      { x: t, y: v, mode: "markers", name: "measured speed", marker: { size: 4, color: "#64748b" } },
+      { x: t, y: model, name: "fitted first-order model", line: { color: "#dc2626", width: 2 } },
+    ], { title: "Step test: data and fitted model", height: 280, xaxis: { title: "time (s)" },
+         yaxis: { title: "speed (mm/s)" } });
+    banner(); design();
+  }
+
+  CL.$("logger").textContent = `// Step test for the drive motor: PWM 0 -> STEP_PCT at t = 0.5 s, speed logged every 5 ms.
+const int PIN_MOTOR_PWM = -1;      // TODO: PWM pin of the motor driver
+const int PIN_ENC_A     = -1;      // TODO: encoder channel A
+const float MM_PER_TICK = 0.0;     // TODO: from the 1 m ruler test (1 / TICKS_PER_MM)
+const int STEP_PCT      = 40;      // PWM step, %
+
+volatile long ticks = 0;
+void onTick() { ticks++; }
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(PIN_MOTOR_PWM, OUTPUT);
+  pinMode(PIN_ENC_A, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(PIN_ENC_A), onTick, RISING);
+  delay(2000);                     // time to open the Serial Monitor
+  Serial.println("t_ms,pwm,speed_mm_s");
+  long lastTicks = 0;
+  unsigned long t0 = millis(), next = t0;
+  while (millis() - t0 < 2500) {
+    if (millis() < next) continue;
+    next += 5;
+    unsigned long t = millis() - t0;
+    int pwm = t >= 500 ? STEP_PCT : 0;
+    analogWrite(PIN_MOTOR_PWM, pwm * 255 / 100);
+    noInterrupts(); long n = ticks; interrupts();
+    float speed = (n - lastTicks) * MM_PER_TICK / 0.005;
+    lastTicks = n;
+    Serial.print(t); Serial.print(','); Serial.print(pwm); Serial.print(','); Serial.println(speed, 1);
+  }
+  analogWrite(PIN_MOTOR_PWM, 0);
+}
+
+void loop() {}
+`;
+
+  const osOf = over => CL.metrics(CL.simulate(params(Object.assign({ Ts: s.Ts }, over))), s.r).os;
+  CL.predictBox("predict", { questions: [
+    { q: "If I design for ζ = 0.6 instead of 0.8 (same settling time), the overshoot will…", name: "overshoot (%)",
+      run: () => {
+        const keep = { kp: s.kp, ki: s.ki, zeta: s.zeta };
+        const os = z => { s.zeta = z; const wn = 4 / (z * s.ts);
+          const ki = wn * wn * motor.tau / motor.K, kp = Math.max(0, (2 * z * wn * motor.tau - 1) / motor.K);
+          return osOf({ kp, ki }); };
+        const res = [os(0.8), os(0.6)]; Object.assign(s, keep); return res;
+      }, why: "Less damping means a faster but more oscillatory response." },
+    { q: "If I ask for a settling time half as long, the peak PWM will…", name: "peak PWM (%)",
+      run: () => {
+        const peak = ts => { const z = s.zeta, wn = 4 / (z * ts);
+          const ki = wn * wn * motor.tau / motor.K, kp = Math.max(0, (2 * z * wn * motor.tau - 1) / motor.K);
+          return Math.max(...CL.simulate(params({ kp, ki, Ts: s.Ts, umin: -1e9, umax: 1e9 })).uSteps.u); };
+        return [peak(s.ts), peak(s.ts / 2)];
+      }, why: "A faster loop needs a bigger push at the start: watch the 100 % limit." },
+  ] });
+
+  CL.copyButton("copy", "code");
+  CL.copyButton("copyLogger", "logger");
+  CL.$("fit").onclick = fit;
+  CL.$("design").onclick = design;
+  const refresh = CL.bindSliders("ctl", s, update);
+  banner();
+  design();
+</script>
+</body>
+</html>

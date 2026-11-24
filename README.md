@@ -1,6 +1,6 @@
 # Dynamic Characteristics Interactive Toolkit
 
-An interactive web toolkit for exploring the dynamic response of sensors. This project was developed for **ENCS4380 – Interfacing Techniques** at Birzeit University.
+An interactive web toolkit for exploring the dynamic response of sensors (Homework 1) and PID feedback control (Homework 2). This project was developed for **ENCS4380 – Interfacing Techniques** at Birzeit University.
 
 **Live site:** [Open the toolkit](https://sadeenmohaddad.github.io/encs4380-dynamic-Orion-/)
 
@@ -41,6 +41,43 @@ The toolkit includes checks for:
 4. Second-order response with \(\zeta=0.5\): overshoot approximately 16.3%.
 5. Second-order response with \(\zeta=1\): no overshoot.
 6. State-space example with \(m=1\), \(b=2\), and \(k=4\): eigenvalues \(-1\pm j1.732\), equal to the system poles.
+
+## Control: PID toolkit (Homework 2)
+
+**Open it:** [Control section](https://sadeenmohaddad.github.io/encs4380-dynamic-Orion-/control.html) (also linked from the landing page).
+
+The plants from Homework 1 are put inside a feedback loop with a PID controller. Every page runs its own simulation in the browser (RK4, step 1 ms), has a "Predict, then check" box, and works on a phone. No server is needed.
+
+| Module | Page | What it shows | Owner |
+|---|---|---|---|
+| P1 PID playground | `control_p1.html` | Kp, Ki, Kd, setpoint and control limit; output and control signal; live rise time, overshoot, settling time and steady-state error; the lecture's gain table | Sadeen Haddad |
+| P2 A slow sensor | `control_p2.html` | True output against the sensor reading; overshoot against sensor τs up to oscillation | Haitham Khalifa |
+| P3 Digital PID | `control_p3.html` | Sampling time Ts, stair-step control signal, performance against Ts, anti-windup on/off, Arduino code with a copy button | Bisan Ayayda |
+| P4 Tuning challenge | `control_p4.html` | A hidden random plant with a noisy clue, a spec, pass/fail per part and a score | Makram Sawaftah |
+| My system | `control_my_system.html` | Our Micromouse drive-motor speed loop: K and τ from a PWM step test, PI design for 0.6 ≤ ζ ≤ 0.8, PWM kept within 0–100 %, Arduino code | Whole team |
+
+Shared code: `control_lib.js` (simulator, metrics, plots, predict box, Arduino code generator) and `control.css`. The overview page is `control.html`.
+
+### How the simulation works
+
+The loop is stepped in time with fourth-order Runge–Kutta (h = 1 ms). The plant is first order, τy' + y = Ku, or second order, y'' + 2ζωn y' + ωn² y = Kωn² u. The sensor is a first-order lag, τs m' + m = y. The continuous PID takes its derivative on the filtered measurement, so a setpoint step gives no derivative kick. The digital PID of P3 updates every Ts and holds u in between:
+u[k] = Kp e[k] + Ki Ts Σe[j] + Kd (e[k] − e[k−1]) / Ts. Anti-windup stops the integral while u is at its limit.
+
+### Validation checks (Homework 2)
+
+They run live on `control.html` with K = 1 and τ = 1 s:
+
+1. P only, Kp = 9: closed-loop τ = 0.1 s and steady-state error = 10 %.
+2. PI, Kp = 1, Ki = 1: ωn = 1 rad/s and ζ = 1 (no overshoot).
+3. Any PI controller: zero steady-state error for a step.
+
+### Our system
+
+The motor values on `control_my_system.html` are placeholders (K = 6 (mm/s) per % PWM, τ = 0.08 s) until we run the PWM step test on our robot. The page includes the step-test logger, a CSV fitter and the place (`MY_MOTOR`) to put the measured values.
+
+### Use of AI
+
+We used Claude (Anthropic) to help write the simulation code, the page layout and the tests. We checked every result against the lecture formulas and the validation checks above. Each team member has read the code of their own module and can explain every line.
 
 ## Screenshots
 

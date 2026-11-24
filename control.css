@@ -1,0 +1,38 @@
+/* control.css - shared style for the Control section (Homework 2), close to the Homework 1 pages. */
+body { font-family: system-ui, sans-serif; max-width: 1000px; margin: auto; padding: 16px; color: #172033; background: #fff; }
+h1 { font-size: 1.5rem; margin: 8px 0; }
+h2 { font-size: 1.15rem; margin: 18px 0 8px; }
+p.lead { color: #374151; }
+nav#nav { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 10px 12px; background: #f1f4f8; border-radius: 8px; margin-bottom: 14px; }
+nav#nav a { color: #174ea6; font-weight: 600; text-decoration: none; }
+nav#nav a:hover { text-decoration: underline; }
+nav#nav a[aria-current="page"] { color: #172033; text-decoration: underline; }
+.panel { background: #f1f4f8; padding: 14px; margin: 14px 0; border-radius: 10px; }
+.layout { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 820px) { .layout { grid-template-columns: 290px 1fr; } }
+.layout > * { min-width: 0; }   /* let grid columns shrink on phones */
+.controls label { display: block; margin: 8px 0 2px; font-size: .92rem; }
+.controls input[type="range"] { width: 100%; }
+.controls select, .controls input[type="number"] { width: 100%; box-sizing: border-box; padding: 6px; }
+.controls .row2 { display: flex; gap: 8px; align-items: center; }
+button { padding: 8px 12px; cursor: pointer; margin: 5px 5px 5px 0; border-radius: 6px; border: 1px solid #aab3c2; background: #fff; }
+button.primary { background: #174ea6; color: #fff; border-color: #174ea6; }
+.metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 8px 0; }
+@media (min-width: 640px) { .metrics { grid-template-columns: repeat(4, 1fr); } }
+.metrics div { background: #fff; border: 1px solid #d5dbe3; border-radius: 8px; padding: 8px; font-size: .82rem; color: #4b5563; }
+.metrics b { display: block; font-size: 1.1rem; color: #172033; }
+.predict { border: 1px dashed #174ea6; border-radius: 10px; padding: 10px 12px; background: #f8fafc; margin: 12px 0; }
+.predict label { display: block; margin: 6px 0; }
+.predict select { width: 100%; max-width: 100%; padding: 5px; }
+.ok { color: #15803d; font-weight: 700; }
+.bad { color: #b91c1c; font-weight: 700; }
+.warn { background: #fff7e6; border: 1px solid #f0b44c; border-radius: 8px; padding: 10px 12px; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: .92rem; }
+th, td { border: 1px solid #aab3c2; padding: 6px 8px; text-align: left; vertical-align: top; }
+th { background: #f1f4f8; }
+pre { overflow-x: auto; background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; font-size: .82rem; }
+textarea { width: 100%; box-sizing: border-box; font-family: ui-monospace, monospace; font-size: .85rem; }
+.diagram { width: 100%; max-width: 680px; color: #172033; display: block; margin: 6px 0; }
+.note { color: #4b5563; font-size: .88rem; }
+.formula { font-family: ui-monospace, monospace; background: #fff; padding: 8px 10px; border-radius: 6px; border: 1px solid #d5dbe3; overflow-x: auto; }
+@media (max-width: 520px) { body { padding: 10px; } table { font-size: .82rem; display: block; overflow-x: auto; } }

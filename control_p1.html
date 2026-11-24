@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>P1: PID playground</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <link rel="stylesheet" href="control.css">
+</head>
+<body>
+<nav id="nav" aria-label="Control navigation"></nav>
+
+<h1>P1: PID playground</h1>
+<p class="lead">Pick a plant from Homework 1, set the gains and a setpoint step, and watch what each term does.
+P makes the loop faster but leaves an error, I removes the error, and D calms the overshoot.</p>
+
+<div id="diagram"></div>
+
+<div class="layout">
+  <section class="panel controls" id="ctl">
+    <label>Plant
+      <select data-k="type">
+        <option value="1">First order K/(τs+1) (Module 1)</option>
+        <option value="2">Second order (Module 3)</option>
+      </select>
+    </label>
+    <label>Plant gain K = <b data-v="K"></b></label>
+    <input type="range" data-k="K" min="0.2" max="5" step="0.1">
+    <div id="firstOnly">
+      <label>Time constant τ = <b data-v="tau"></b> s</label>
+      <input type="range" data-k="tau" min="0.1" max="5" step="0.05">
+    </div>
+    <div id="secondOnly">
+      <label>Natural frequency ωn = <b data-v="wn"></b> rad/s</label>
+      <input type="range" data-k="wn" min="0.5" max="8" step="0.1">
+      <label>Damping ratio ζ = <b data-v="z"></b></label>
+      <input type="range" data-k="z" min="0.1" max="1.5" step="0.05">
+    </div>
+    <label>Kp = <b data-v="kp"></b></label>
+    <input type="range" data-k="kp" min="0" max="20" step="0.1">
+    <label>Ki = <b data-v="ki"></b></label>
+    <input type="range" data-k="ki" min="0" max="20" step="0.1">
+    <label>Kd = <b data-v="kd"></b></label>
+    <input type="range" data-k="kd" min="0" max="3" step="0.01">
+    <label>Setpoint step r = <b data-v="r"></b></label>
+    <input type="range" data-k="r" min="0.5" max="5" step="0.5">
+    <label>Control limit ±u<sub>max</sub> = <b data-v="umax"></b></label>
+    <input type="range" data-k="umax" min="1" max="100" step="1">
+    <label>Simulated time = <b data-v="T"></b> s</label>
+    <input type="range" data-k="T" min="2" max="30" step="1">
+    <button type="button" id="reset">Reset to P only, Kp = 9</button>
+  </section>
+
+  <section>
+    <div id="plotY"></div>
+    <div id="plotU"></div>
+    <div id="metrics"></div>
+    <div id="predict"></div>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>What each gain does (the lecture's table)</h2>
+  <table>
+    <tr><th>Increase</th><th>Rise time</th><th>Overshoot</th><th>Settling time</th><th>Steady-state error</th></tr>
+    <tr><td>Kp</td><td>decreases</td><td>increases</td><td>small change</td><td>decreases (never zero)</td></tr>
+    <tr><td>Ki</td><td>decreases</td><td>increases</td><td>increases</td><td>eliminated</td></tr>
+    <tr><td>Kd</td><td>small change</td><td>decreases</td><td>decreases</td><td>no effect</td></tr>
+  </table>
+  <p class="note">Try it: start with P only (Ki = Kd = 0), then add I, then D, and watch the four numbers above the table.
+  The derivative acts on the measurement, filtered over 10 ms, so a setpoint step gives no "derivative kick".
+  The loop is simulated with RK4, step 1 ms (see <code>control_lib.js</code>).</p>
+</section>
+
+<script src="control_lib.js"></script>
+<script>
+  const START = { type: "1", K: 1, tau: 1, wn: 2, z: 0.5, kp: 9, ki: 0, kd: 0, r: 1, umax: 20, T: 3 };
+  const s = Object.assign({}, START);
+
+  CL.nav("control_p1.html");
+  CL.$("diagram").innerHTML = CL.diagram({ sensor: false });
+
+  function params(over) {
+    const p = Object.assign({}, s, { taus: 0 }, over || {});
+    p.umin = -p.umax;
+    return p;
+  }
+
+  function update() {
+    CL.$("firstOnly").hidden = s.type !== "1";
+    CL.$("secondOnly").hidden = s.type !== "2";
+    const o = CL.simulate(params());
+    const m = CL.metrics(o, s.r);
+    CL.plot("plotY", [
+      { x: o.t, y: o.y, name: "output y", line: { color: "#2563eb", width: 2.5 } },
+      { x: [0, s.T], y: [s.r, s.r], name: "setpoint r", line: { color: "#6b7280", dash: "dash" } },
+    ], { title: "Output against setpoint", xaxis: { title: "time (s)" }, yaxis: { title: "y" } });
+    CL.plot("plotU", [
+      { x: o.t, y: o.u, name: "control signal u", line: { color: "#16a34a", width: 2 } },
+      { x: [0, s.T], y: [s.umax, s.umax], name: "limit ±umax", line: { color: "#dc2626", dash: "dot" } },
+      { x: [0, s.T], y: [-s.umax, -s.umax], showlegend: false, line: { color: "#dc2626", dash: "dot" } },
+    ], { title: "Control signal u and its limit", height: 260, xaxis: { title: "time (s)" }, yaxis: { title: "u" } });
+    const sat = o.u.some(v => Math.abs(v) >= s.umax - 1e-9);
+    CL.$("metrics").innerHTML = CL.metricsHTML(m,
+      sat ? '<p class="note">u reached its limit, so the loop is slower than the linear theory says.</p>' : "");
+  }
+
+  const ess = () => CL.metrics(CL.simulate(params()), s.r).ess;
+  const os = p => CL.metrics(CL.simulate(params(p)), s.r).os;
+  CL.predictBox("predict", { questions: [
+    { q: "If I double Kp, the steady-state error will…", name: "steady-state error (%)",
+      run: () => [ess(), CL.metrics(CL.simulate(params({ kp: s.kp * 2 || 1 })), s.r).ess],
+      why: "With P only the error is 1/(1+K·Kp): more gain, less error, but never zero." },
+    { q: "If I add Ki = 5 (keeping Kp), the steady-state error will…", name: "steady-state error (%)",
+      run: () => [ess(), CL.metrics(CL.simulate(params({ ki: s.ki + 5 })), s.r).ess],
+      why: "The integral keeps growing while any error is left, so it pushes the error to zero." },
+    { q: "If I add Kd = 0.3, the overshoot will…", name: "overshoot (%)",
+      run: () => [os(), os({ kd: s.kd + 0.3 })],
+      why: "D reacts to how fast the output is rising and brakes it before it passes the setpoint." },
+  ] });
+
+  const refresh = CL.bindSliders("ctl", s, update);
+  CL.$("reset").onclick = () => { Object.assign(s, START); refresh(); update(); };
+  update();
+</script>
+</body>
+</html>

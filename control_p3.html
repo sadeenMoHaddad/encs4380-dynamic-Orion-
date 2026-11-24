@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>P3: Digital PID</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <link rel="stylesheet" href="control.css">
+</head>
+<body>
+<nav id="nav" aria-label="Control navigation"></nav>
+
+<h1>P3: Digital PID</h1>
+<p class="lead">On an Arduino the controller does not run all the time. It reads the sensor once every sampling time
+T<sub>s</sub>, computes u, and holds that u until the next sample. This page runs exactly that loop:</p>
+<p class="formula">u[k] = Kp·e[k] + Ki·Ts·Σ<sub>j=0..k</sub> e[j] + Kd·(e[k] − e[k−1]) / Ts</p>
+
+<div id="diagram"></div>
+
+<div class="layout">
+  <section class="panel controls" id="ctl">
+    <label>Sampling time T<sub>s</sub> = <b data-v="Ts"></b> s</label>
+    <input type="range" data-k="Ts" min="0.005" max="0.5" step="0.005">
+    <label><input type="checkbox" data-k="aw"> Anti-windup on</label>
+    <label>Control limit ±u<sub>max</sub> = <b data-v="umax"></b></label>
+    <input type="range" data-k="umax" min="0.5" max="20" step="0.5">
+    <label>Kp = <b data-v="kp"></b></label>
+    <input type="range" data-k="kp" min="0" max="20" step="0.1">
+    <label>Ki = <b data-v="ki"></b></label>
+    <input type="range" data-k="ki" min="0" max="20" step="0.1">
+    <label>Kd = <b data-v="kd"></b></label>
+    <input type="range" data-k="kd" min="0" max="2" step="0.01">
+    <label>Setpoint step r = <b data-v="r"></b></label>
+    <input type="range" data-k="r" min="0.5" max="5" step="0.5">
+    <label>Plant
+      <select data-k="type">
+        <option value="1">First order K/(τs+1) (Module 1)</option>
+        <option value="2">Second order (Module 3)</option>
+      </select>
+    </label>
+    <label>Plant gain K = <b data-v="K"></b></label>
+    <input type="range" data-k="K" min="0.2" max="5" step="0.1">
+    <div id="firstOnly">
+      <label>Time constant τ = <b data-v="tau"></b> s</label>
+      <input type="range" data-k="tau" min="0.1" max="5" step="0.05">
+    </div>
+    <div id="secondOnly">
+      <label>Natural frequency ωn = <b data-v="wn"></b> rad/s</label>
+      <input type="range" data-k="wn" min="0.5" max="8" step="0.1">
+      <label>Damping ratio ζ = <b data-v="z"></b></label>
+      <input type="range" data-k="z" min="0.1" max="1.5" step="0.05">
+    </div>
+    <label>Simulated time = <b data-v="T"></b> s</label>
+    <input type="range" data-k="T" min="2" max="20" step="1">
+  </section>
+
+  <section>
+    <div id="plotY"></div>
+    <div id="plotU"></div>
+    <div id="metrics"></div>
+    <div id="plotTs"></div>
+    <div id="predict"></div>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>Arduino code for the current gains</h2>
+  <p class="note">The same loop as the simulation, with your Kp, Ki, Kd, Ts, limits and anti-windup.
+  Replace the two TODO lines with your sensor and actuator.</p>
+  <button type="button" id="copy" class="primary">Copy code</button>
+  <pre id="code"></pre>
+</section>
+
+<section class="panel">
+  <h2>What to notice</h2>
+  <ul>
+    <li><b>Stair steps:</b> u only changes at t = k·Ts (zero-order hold). Between samples the plant runs open loop.</li>
+    <li><b>T<sub>s</sub> grows, performance falls:</b> holding u for longer acts like a delay of about Ts/2. The overshoot
+      grows, and past a point the loop oscillates. A common rule: Ts at most one tenth of the closed-loop time constant.</li>
+    <li><b>Anti-windup:</b> while u is stuck at its limit, a plain integral keeps adding error. When the output finally
+      arrives, that stored sum pushes it far past the setpoint. With anti-windup on, the sum stops growing while u is
+      saturated (conditional integration), so the overshoot is much smaller. The dashed curve shows the other setting.</li>
+  </ul>
+</section>
+
+<script src="control_lib.js"></script>
+<script>
+  const s = { type: "1", K: 1, tau: 1, wn: 2, z: 0.5, Ts: 0.05, aw: true, umax: 2,
+              kp: 6, ki: 8, kd: 0.3, r: 1, T: 8 };
+
+  CL.nav("control_p3.html");
+  CL.$("diagram").innerHTML = CL.diagram({ digital: true });
+
+  function params(over) {
+    const p = Object.assign({}, s, { taus: 0 }, over || {});
+    p.umin = -p.umax;
+    return p;
+  }
+
+  function update() {
+    CL.$("firstOnly").hidden = s.type !== "1";
+    CL.$("secondOnly").hidden = s.type !== "2";
+    const o = CL.simulate(params());
+    const other = CL.simulate(params({ aw: !s.aw }));
+    const cont = CL.simulate(params({ Ts: 0 }));
+    const m = CL.metrics(o, s.r);
+
+    CL.plot("plotY", [
+      { x: o.t, y: o.y, name: `digital PID, Ts = ${s.Ts} s`, line: { color: "#2563eb", width: 2.5 } },
+      { x: cont.t, y: cont.y, name: "continuous PID (Ts → 0)", line: { color: "#6b7280", width: 1.5 } },
+      { x: other.t, y: other.y, name: `anti-windup ${s.aw ? "off" : "on"}`,
+        line: { color: "#ea580c", width: 1.5, dash: "dash" } },
+      { x: [0, s.T], y: [s.r, s.r], name: "setpoint", line: { color: "#111827", dash: "dot", width: 1 } },
+    ], { title: "Output", xaxis: { title: "time (s)" } });
+
+    // Stair-step u: one point per sample, drawn as a step ("hv").
+    const ut = o.uSteps.t.concat([s.T]);
+    const uu = o.uSteps.u.concat([o.uSteps.u[o.uSteps.u.length - 1]]);
+    CL.plot("plotU", [
+      { x: ut, y: uu, name: "u[k] held for Ts", line: { color: "#16a34a", width: 2, shape: "hv" } },
+      { x: [0, s.T], y: [s.umax, s.umax], name: "limit ±umax", line: { color: "#dc2626", dash: "dot" } },
+      { x: [0, s.T], y: [-s.umax, -s.umax], showlegend: false, line: { color: "#dc2626", dash: "dot" } },
+    ], { title: "Control signal: changes only at the samples", height: 260, xaxis: { title: "time (s)" } });
+    CL.$("metrics").innerHTML = CL.metricsHTML(m);
+
+    // Performance as Ts grows.
+    const xs = [], os = [], err = [], col = [];
+    for (const ts of [0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2, 0.25, 0.3, 0.35, 0.4, 0.5]) {
+      const r = CL.simulate(params({ Ts: ts, T: Math.max(s.T, 10) }));
+      const mm = CL.metrics(r, s.r);
+      xs.push(ts); os.push(mm.os); err.push(CL.iae(r, s.r)); col.push(mm.oscillating ? "#dc2626" : "#2563eb");
+    }
+    CL.plot("plotTs", [
+      { x: xs, y: os, name: "overshoot % (red = oscillates)", mode: "lines+markers",
+        marker: { color: col, size: 7 }, line: { color: "#94a3b8" } },
+      { x: xs, y: err, name: "IAE = ∫|e|dt", mode: "lines+markers", yaxis: "y2", line: { color: "#7c3aed" } },
+      { x: [s.Ts, s.Ts], y: [0, Math.max(10, ...os.filter(isFinite))], name: "current Ts",
+        mode: "lines", line: { color: "#16a34a", dash: "dash" } },
+    ], { title: "Performance falls as Ts grows", height: 300, xaxis: { title: "Ts (s)" },
+         yaxis: { title: "overshoot (%)" },
+         yaxis2: { title: "IAE", overlaying: "y", side: "right", rangemode: "tozero" } });
+
+    CL.$("code").textContent = CL.arduinoCode({ kp: s.kp, ki: s.ki, kd: s.kd, Ts: s.Ts,
+      umin: -s.umax, umax: s.umax, aw: s.aw, r: s.r });
+  }
+
+  const osOf = p => CL.metrics(CL.simulate(params(p)), s.r).os;
+  CL.predictBox("predict", { questions: [
+    { q: "If I make Ts four times longer, the overshoot will…", name: "overshoot (%)",
+      run: () => [osOf(), osOf({ Ts: Math.min(0.5, s.Ts * 4) })],
+      why: "Holding u for longer is like adding a delay to the loop." },
+    { q: "If I switch anti-windup off, the overshoot will…", name: "overshoot (%)",
+      run: () => [osOf({ aw: true }), osOf({ aw: false })],
+      why: "Only when u saturates: the stored integral then pushes the output past the setpoint." },
+    { q: "If I raise the limit umax to 20, the effect of anti-windup will…", name: "overshoot difference off − on (%)",
+      run: () => [osOf({ aw: false }) - osOf({ aw: true }),
+                  osOf({ aw: false, umax: 20 }) - osOf({ aw: true, umax: 20 })],
+      why: "With a high limit u never saturates, so there is nothing for anti-windup to do." },
+  ] });
+
+  CL.copyButton("copy", "code");
+  CL.bindSliders("ctl", s, update);
+  update();
+</script>
+</body>
+</html>

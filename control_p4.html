@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>P4: Tuning challenge</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <link rel="stylesheet" href="control.css">
+</head>
+<body>
+<nav id="nav" aria-label="Control navigation"></nav>
+
+<h1>P4: Tuning challenge</h1>
+<p class="lead">A hidden plant (first or second order, like Homework 1's Module 4) produced the noisy open-loop step
+response below. Read what you can from it, choose Kp, Ki and Kd, and test your controller against the spec.
+Every plant is checked before you see it: at least one set of gains meets the whole spec.</p>
+
+<section class="panel" id="board">
+  <strong>Round <span id="round">1</span></strong> ·
+  Total <span id="total">0</span> points · Average <span id="avg">0</span>/100
+</section>
+
+<section class="panel">
+  <h2>The spec for this plant</h2>
+  <table id="spec"></table>
+  <p class="note">Setpoint step r = 1. The control signal is limited to ±u<sub>max</sub> (shown in the spec).
+  Score: 35 points for overshoot, 35 for settling time, 30 for steady-state error.</p>
+</section>
+
+<div id="plotOpen"></div>
+
+<div class="layout">
+  <section class="panel controls" id="ctl">
+    <label>Kp = <b data-v="kp"></b></label>
+    <input type="range" data-k="kp" min="0" max="30" step="0.1">
+    <label>Ki = <b data-v="ki"></b></label>
+    <input type="range" data-k="ki" min="0" max="40" step="0.1">
+    <label>Kd = <b data-v="kd"></b></label>
+    <input type="range" data-k="kd" min="0" max="5" step="0.01">
+    <button type="button" id="test" class="primary">Test my controller</button>
+    <button type="button" id="hint">Hint</button>
+    <button type="button" id="reveal">Reveal the plant</button>
+    <button type="button" id="next">Next plant</button>
+    <p id="hintText" class="note"></p>
+  </section>
+  <section>
+    <div id="plotTest"></div>
+    <div id="result"></div>
+    <div id="predict"></div>
+  </section>
+</div>
+
+<script src="control_lib.js"></script>
+<script>
+  CL.nav("control_p4.html");
+  const g = { kp: 1, ki: 0, kd: 0 };
+  let plant = null, spec = null, lastScore = null, round = 1, total = 0, done = 0;
+
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const round1 = v => Math.round(v * 10) / 10;
+
+  // Open-loop settling time, used to set a spec that needs feedback to meet.
+  function openLoopSettle(p) {
+    if (p.type === "1") return 4 * p.tau;
+    return p.z < 1 ? 4 / (p.z * p.wn) : 4 * (p.z + Math.sqrt(p.z * p.z - 1)) / p.wn;
+  }
+
+  function grade(p, sp, gains) {
+    const o = CL.simulate(Object.assign({}, p, gains, { r: 1, umax: sp.umax, umin: -sp.umax, T: sp.T }));
+    const m = CL.metrics(o, 1);
+    const okOs = !m.oscillating && m.os <= sp.os;
+    const okTs = !m.oscillating && m.settle != null && m.settle <= sp.ts;
+    const okE = !m.oscillating && Math.abs(m.ess) <= sp.ess;
+    return { o, m, okOs, okTs, okE, score: (okOs ? 35 : 0) + (okTs ? 35 : 0) + (okE ? 30 : 0) };
+  }
+
+  // Search a small grid of gains: proof that the spec can be met.
+  function findSolution(p, sp) {
+    for (const kp of [0.5, 1, 2, 3, 5, 8, 12]) for (const ki of [0.5, 1, 2, 4, 8, 16]) for (const kd of [0, 0.1, 0.3, 0.6]) {
+      const gains = { kp: kp / p.K, ki: ki / p.K, kd: kd / p.K };
+      if (grade(p, sp, gains).score === 100) return gains;
+    }
+    return null;
+  }
+
+  function newPlant() {
+    for (let tries = 0; tries < 40; tries++) {
+      const p = Math.random() < 0.5
+        ? { type: "1", K: round1(rnd(0.5, 3)), tau: round1(rnd(0.3, 2.5)) }
+        : { type: "2", K: round1(rnd(0.5, 3)), wn: round1(rnd(1.5, 6)), z: Math.round(rnd(0.2, 1.1) * 20) / 20 };
+      const ts = Math.max(0.5, round1(0.6 * openLoopSettle(p)));
+      const sp = { os: 10, ts, ess: 1, umax: round1(8 / p.K), T: Math.max(6, 3 * ts) };
+      const sol = findSolution(p, sp);
+      if (sol) { plant = p; spec = sp; spec.solution = sol; return; }
+    }
+  }
+
+  function showRound() {
+    newPlant();
+    lastScore = null;
+    CL.$("round").textContent = round;
+    CL.$("hintText").textContent = "";
+    CL.$("result").innerHTML = "";
+    Plotly.purge("plotTest");
+    CL.$("spec").innerHTML = `<tr><th>Part</th><th>Requirement</th></tr>
+      <tr><td>Overshoot</td><td>≤ ${spec.os} %</td></tr>
+      <tr><td>Settling time (2%)</td><td>≤ ${spec.ts} s</td></tr>
+      <tr><td>Steady-state error</td><td>|e| ≤ ${spec.ess} %</td></tr>
+      <tr><td>Control limit</td><td>|u| ≤ ${spec.umax}</td></tr>`;
+    // Noisy open-loop response to u = 1 (the clue).
+    const open = openLoop(plant, spec.T);
+    const noise = 0.02 * plant.K;
+    CL.plot("plotOpen", [
+      { x: open.t, y: open.y.map(v => v + (Math.random() * 2 - 1) * noise), mode: "markers",
+        marker: { size: 3, color: "#64748b" }, name: "measured y (noisy), input u = 1" },
+    ], { title: "Clue: open-loop step response of the hidden plant (u = 1 from t = 0)", height: 280,
+         xaxis: { title: "time (s)" }, yaxis: { title: "y" } });
+  }
+
+  // Open-loop step: the same RK4 model, driven by a constant u = 1 (no controller).
+  function openLoop(p, T) {
+    const h = 0.005, out = { t: [], y: [] };
+    let y = 0, v = 0;
+    for (let t = 0; t <= T + 1e-9; t += h) {
+      if (Math.round(t / h) % 4 === 0) { out.t.push(t); out.y.push(y); }
+      const f = (y_, v_) => p.type === "1" ? [(p.K - y_) / p.tau, 0]
+        : [v_, p.wn * p.wn * (p.K - y_) - 2 * p.z * p.wn * v_];
+      const k1 = f(y, v), k2 = f(y + h / 2 * k1[0], v + h / 2 * k1[1]);
+      const k3 = f(y + h / 2 * k2[0], v + h / 2 * k2[1]), k4 = f(y + h * k3[0], v + h * k3[1]);
+      y += h / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]);
+      v += h / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]);
+    }
+    return out;
+  }
+
+  function test() {
+    const r = grade(plant, spec, g);
+    lastScore = Math.max(lastScore || 0, r.score);
+    const yMax = Math.max(1.3, ...r.o.y.filter(isFinite).map(v => Math.min(v, 3)));
+    CL.plot("plotTest", [
+      { x: [0, spec.T, spec.T, 0], y: [1 + spec.os / 100, 1 + spec.os / 100, yMax, yMax], fill: "toself",
+        fillcolor: "rgba(220,38,38,0.08)", line: { width: 0 }, name: "overshoot not allowed", hoverinfo: "skip" },
+      { x: [spec.ts, spec.T, spec.T, spec.ts, spec.ts], y: [0.98, 0.98, 1.02, 1.02, 0.98],
+        line: { color: "#16a34a", dash: "dot" }, name: "must be inside ±2% after ts" },
+      { x: r.o.t, y: r.o.y, name: "your closed loop", line: { color: "#2563eb", width: 2.5 } },
+      { x: [0, spec.T], y: [1, 1], name: "setpoint", line: { color: "#111827", dash: "dot", width: 1 } },
+    ], { title: "Your controller against the spec", xaxis: { title: "time (s)" },
+         yaxis: { range: [0, Math.min(yMax, 3)] } });
+    const row = (name, ok, got) => `<tr><td>${name}</td><td>${got}</td><td class="${ok ? "ok" : "bad"}">${ok ? "PASS" : "FAIL"}</td></tr>`;
+    const m = r.m;
+    CL.$("result").innerHTML = `<table><tr><th>Part</th><th>Yours</th><th></th></tr>
+      ${row(`Overshoot ≤ ${spec.os} %`, r.okOs, m.oscillating ? "oscillates" : CL.fmt(m.os, 1, " %"))}
+      ${row(`Settling ≤ ${spec.ts} s`, r.okTs, m.oscillating || m.settle == null ? "not settled" : CL.fmt(m.settle, 2, " s"))}
+      ${row(`|Steady-state error| ≤ ${spec.ess} %`, r.okE, m.oscillating ? "—" : CL.fmt(m.ess, 2, " %"))}
+      </table><p><b>Score this test: ${r.score}/100</b> (best this round: ${lastScore}).</p>`;
+  }
+
+  CL.$("test").onclick = test;
+  CL.$("hint").onclick = () => {
+    CL.$("hintText").innerHTML = plant.type === "1"
+      ? "It looks first order: read K from the final value and τ at 63%. Start with PI: Ki removes the error."
+      : "It is second order (it bends or rings). Start with PI, then add a little Kd to calm the overshoot.";
+  };
+  CL.$("reveal").onclick = () => {
+    const sol = spec.solution;
+    CL.$("hintText").innerHTML = (plant.type === "1"
+      ? `First order: K = ${plant.K}, τ = ${plant.tau} s.`
+      : `Second order: K = ${plant.K}, ωn = ${plant.wn} rad/s, ζ = ${plant.z}.`) +
+      ` One set of gains that passes: Kp = ${sol.kp.toFixed(2)}, Ki = ${sol.ki.toFixed(2)}, Kd = ${sol.kd.toFixed(2)}.`;
+  };
+  CL.$("next").onclick = () => {
+    total += lastScore || 0; done += 1; round += 1;
+    CL.$("total").textContent = total;
+    CL.$("avg").textContent = (total / done).toFixed(0);
+    Object.assign(g, { kp: 1, ki: 0, kd: 0 }); refresh();
+    showRound();
+  };
+
+  const osOf = gains => CL.metrics(CL.simulate(Object.assign({}, plant, gains,
+    { r: 1, umax: spec.umax, umin: -spec.umax, T: spec.T })), 1).os;
+  CL.predictBox("predict", { questions: [
+    { q: "If I double Ki, the overshoot will…", name: "overshoot (%)",
+      run: () => [osOf(g), osOf(Object.assign({}, g, { ki: g.ki * 2 || 1 }))],
+      why: "A stronger integral reaches the setpoint sooner but keeps pushing after it." },
+    { q: "If I add Kd = 0.5, the overshoot will…", name: "overshoot (%)",
+      run: () => [osOf(g), osOf(Object.assign({}, g, { kd: g.kd + 0.5 }))],
+      why: "D brakes the output as it rises quickly towards the setpoint." },
+  ] });
+
+  const refresh = CL.bindSliders("ctl", g, () => {});
+  showRound();
+</script>
+</body>
+</html>

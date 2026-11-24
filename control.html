@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Control: PID toolkit</title>
+  <link rel="stylesheet" href="control.css">
+</head>
+<body>
+<nav id="nav" aria-label="Control navigation"></nav>
+
+<h1>Control: PID toolkit (Homework 2)</h1>
+<p class="lead">Homework 1 showed how slow a system is. This section shows how feedback makes it faster and more
+accurate. Take the first-order plant from Module 1 with K = 1 and τ = 1 s: on its own it needs 3 s to reach 95%.
+With a proportional controller Kp = 9 the closed loop has τ = 0.1 s, ten times faster, but it settles 10% short.
+An integral term removes that error, and a derivative term calms the overshoot that follows.</p>
+
+<div id="diagram"></div>
+
+<section class="panel">
+  <h2>The modules</h2>
+  <table>
+    <tr><th>Module</th><th>What you can change</th><th>What the page shows</th></tr>
+    <tr><td><a href="control_p1.html">P1 PID playground</a></td><td>Plant (Module 1 or Module 3), Kp, Ki, Kd, setpoint step, control limit</td>
+      <td>Block diagram, output against setpoint, control signal with its limit, live rise time, overshoot, settling time and steady-state error</td></tr>
+    <tr><td><a href="control_p2.html">P2 A slow sensor in the loop</a></td><td>Sensor τs, plant, PID gains</td>
+      <td>True output and sensor reading on one plot; overshoot against τs up to oscillation</td></tr>
+    <tr><td><a href="control_p3.html">P3 Digital PID</a></td><td>Sampling time Ts, gains, control limit, anti-windup on/off</td>
+      <td>Stair-step control signal, performance against Ts, the anti-windup effect, Arduino code with a copy button</td></tr>
+    <tr><td><a href="control_p4.html">P4 Tuning challenge</a></td><td>PID gains</td>
+      <td>A hidden random plant and a spec; pass or fail for each part and a score</td></tr>
+    <tr><td><a href="control_my_system.html">My system</a></td><td>Our Micromouse drive motor</td>
+      <td>The motor model from a PWM step test, our spec, the designed PI gains, the simulated response and the Arduino code</td></tr>
+  </table>
+</section>
+
+<section class="panel">
+  <h2>Validation checks</h2>
+  <p class="note">Plant K/(τs + 1) with K = 1 and τ = 1 s. Each check runs the same RK4 simulator the modules use, live, when this page opens.</p>
+  <table id="val"></table>
+</section>
+
+<section class="panel">
+  <h2>How the simulation works</h2>
+  <p>A closed-form answer does not exist for every gain setting, so every page steps the loop in time with
+  <b>RK4</b> (fourth-order Runge–Kutta), step h = 1 ms. The state is the plant output (and its derivative for a
+  second-order plant) and the sensor reading. At each step the controller computes u from the error, u is clipped to
+  its limit, and RK4 advances the plant with that u. The continuous PID updates every step; the digital PID of P3
+  updates every Ts and holds u in between. Source: <code>control_lib.js</code>.</p>
+</section>
+
+<script src="control_lib.js"></script>
+<script>
+  CL.nav("control.html");
+  CL.$("diagram").innerHTML = CL.diagram({ sensor: true });
+
+  const plant = { type: "1", K: 1, tau: 1, r: 1, umax: 1e6 };
+  const rows = [];
+
+  // 1. P only, Kp = 9: closed-loop tau = 0.1 s, steady-state error = 10 %.
+  let o = CL.simulate(Object.assign({}, plant, { kp: 9, ki: 0, kd: 0, T: 3 }));
+  let m = CL.metrics(o, 1);
+  const tau63 = o.t[o.y.findIndex(v => v >= 0.632 * m.yf)];
+  rows.push(["1. P only, Kp = 9", "τ_cl = τ/(1 + K·Kp) = 0.1 s, error = 1/(1 + K·Kp) = 10 %",
+    `τ_cl = ${CL.fmt(tau63, 3, " s")}, error = ${CL.fmt(m.ess, 2, " %")}`,
+    Math.abs(tau63 - 0.1) < 0.005 && Math.abs(m.ess - 10) < 0.2]);
+
+  // 2. PI, Kp = 1, Ki = 1: wn = sqrt(K Ki / tau) = 1 rad/s, zeta = (1 + K Kp) / (2 sqrt(tau K Ki)) = 1.
+  const wn = Math.sqrt(1 * 1 / 1), zeta = (1 + 1 * 1) / (2 * Math.sqrt(1 * 1 * 1));
+  o = CL.simulate(Object.assign({}, plant, { kp: 1, ki: 1, kd: 0, T: 10 }));
+  m = CL.metrics(o, 1);
+  const y1 = o.y[o.t.findIndex(t => t >= 1)];
+  rows.push(["2. PI, Kp = 1, Ki = 1", "ωn = 1 rad/s, ζ = 1 (critically damped: no overshoot)",
+    `ωn = ${CL.fmt(wn, 2)}, ζ = ${CL.fmt(zeta, 2)}; simulated overshoot ${CL.fmt(m.os, 2, " %")}, y(1 s) = ${CL.fmt(y1, 3)}`,
+    Math.abs(wn - 1) < 1e-9 && Math.abs(zeta - 1) < 1e-9 && m.os < 0.5]);
+
+  // 3. Any PI: zero steady-state error for a step.
+  const tests = [[2, 3], [5, 10], [0.5, 4]];
+  const errs = tests.map(([kp, ki]) => CL.metrics(CL.simulate(Object.assign({}, plant, { kp, ki, kd: 0, T: 25 })), 1).ess);
+  rows.push(["3. Any PI controller", "zero steady-state error for a step",
+    tests.map(([kp, ki], i) => `Kp ${kp}, Ki ${ki}: ${CL.fmt(errs[i], 3, " %")}`).join("; "),
+    errs.every(e => Math.abs(e) < 0.05)]);
+
+  CL.$("val").innerHTML = "<tr><th>Check</th><th>Expected</th><th>Simulated</th><th></th></tr>" +
+    rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td>
+      <td class="${r[3] ? "ok" : "bad"}">${r[3] ? "PASS" : "FAIL"}</td></tr>`).join("");
+</script>
+</body>
+</html>
